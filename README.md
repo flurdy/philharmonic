@@ -8,6 +8,8 @@ Concept based on https://github.com/hmrc/service-manager but using docker and an
 * stacks of services
 * depdendency for services
 * mocks and stubs can override service
+* conf.d of services configs
+* hocon or groovy dsl
 * parrallel ramp up
 * block dependency until ready
 * unique name per service
@@ -24,10 +26,10 @@ Concept based on https://github.com/hmrc/service-manager but using docker and an
 * run local images
 * repository relase and snapshot builds
 * lookups
-* * status
-* * port
-* * instaces
-* * zone
+ * status
+ * port
+ * instaces
+ * zone
 * logging
 * feature flags and properties injection
 * balcony UI read only viewer

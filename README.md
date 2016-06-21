@@ -14,20 +14,20 @@ Concept based on https://github.com/hmrc/service-manager but using docker and an
 * unique port per service
 * dynamic ports for automated testing
 * support for
-** docker
-** docker compose
-** docker swarm
-** docker cloud
-** Amazon ECS
-** Google GCE
-** Google GKE
+ * docker
+ * docker compose
+ * docker swarm
+ * docker cloud
+ * Amazon ECS
+ * Google GCE
+ * Google GKE
 * run local images
 * repository relase and snapshot builds
 * lookups
-** status
-** port
-** instaces
-** zone
+* * status
+* * port
+* * instaces
+* * zone
 * logging
 * feature flags and properties injection
 * balcony UI read only viewer

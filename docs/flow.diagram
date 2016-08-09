@@ -1,0 +1,31 @@
+title Philharmonic flow
+
+person -> harmonic cli: start stack [MYSTACK]
+harmonic cli -> docker api: Is conductor running
+docker api -> harmonic cli: no
+harmonic cli -> docker api: start conductor
+loop
+  harmonic cli -> docker api: Is conductor running
+  docker api -> harmonic cli: no
+end
+docker api -> harmonic cli: yes
+harmonic cli -> conductor: start stack
+conductor -> notes: Get stack details
+notes -> conductor: stack details
+loop
+  conductor -> notes: Get sub stack details
+  notes -> conductor: stack details
+end
+loop
+  conductor -> notes: Get service details
+  notes -> conductor: service details
+end
+loop
+  conductor -> conductor: is service running
+  alt
+    conductor -> conductor: no
+    conductor -> docker api: start service
+  else
+    conductor -> conductor: yes
+  end
+end

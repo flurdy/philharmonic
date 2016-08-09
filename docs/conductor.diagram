@@ -1,0 +1,34 @@
+
+title: Conductor actor flows
+
+? -> Director: start
+Director-> StackRegistry: find and start stack
+StackRegistry-> StackRegistry: find stack
+alt stack found
+  note over StackRegistry :
+    services: [MYSERVICE1, MYDATABASE]
+  end note
+  alt No substack
+    loop MYSERVICE1, MYDATABASE
+      StackRegistry -> ServiceRegistry: find and start service
+      ServiceRegistry -> ServiceRegistry: find service
+      alt service found
+        note over ServiceRegistry:
+          image: flurdy/myservice
+          version: latest
+        end note
+        ServiceRegistry -> DockerGantry: start service
+        DockerGantry -> Docker: start image
+      else no service found
+        note right of ServiceRegistry
+          some error flow
+        end note
+      end
+    end
+  end
+else no stack found
+  StackRegistry -> ServiceRegistry: find and start service
+  note right of ServiceRegistry
+      as above
+  end note
+end

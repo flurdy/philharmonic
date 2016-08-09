@@ -12,13 +12,12 @@ class ApplicationDaemon() extends AbstractApplicationDaemon {
 }
 
 class Application() extends ReferenceApplication
-with ConductorService with WithLogging {
+with ConductorService with WithLoggingSystem {
 
    val applicationName = "conductor"
-   implicit val actorSystem = ActorSystem(s"$applicationName-system")
+   implicit override val actorSystem = ActorSystem(s"$applicationName-system")
    implicit val materializer = ActorMaterializer()
-   // val log = Logging(actorSystem, this)
-   override val director = actorSystem.actorOf(Director.props(actorSystem))
+   override val director = actorSystem.actorOf(Director.props(), "director")
 
    def startApplication() = {
       log.info(s"Starting $applicationName")

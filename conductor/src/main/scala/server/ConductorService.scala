@@ -2,14 +2,11 @@ package com.flurdy.conductor.server
 
 import akka.actor.ActorRef
 import akka.event.LoggingAdapter
-import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server._
 import StatusCodes._
 import Directives._
 import com.flurdy.conductor._
-// import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-// import spray.json.DefaultJsonProtocol._
 
 trait ConductorService {
    import Director._
@@ -32,7 +29,7 @@ trait ConductorService {
             path("start"){
                complete{
                   log.info(s"Starting $serviceName")
-                  director ! StartStackOrService(serviceName)
+                  director ! StartStackOrService(serviceName.toLowerCase)
                   s"please start: $serviceName"
                }
             } ~

@@ -34,7 +34,11 @@ trait ConductorService {
                }
             } ~
             path("stop"){
-               complete(s"please stop: $serviceName")
+               complete{
+                  log.info(s"Stopping $serviceName")
+                  director ! StopStackOrService(serviceName.toLowerCase)
+                  s"please stop: $serviceName"
+               }
             }
          }
       }

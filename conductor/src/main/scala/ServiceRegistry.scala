@@ -46,7 +46,7 @@ trait ServiceRegistryActor extends Actor with WithLogging {
    }
 
    def stopServices(services: Map[String, ActorRef], initiator: ActorRef) = {
-      services.keys match {
+      services.keys.toList match {
          case head::tail =>
             val headLessServices: Map[String, ActorRef] = services - head
             services.get(head).map(_ ! StopService(headLessServices, initiator ))
@@ -65,6 +65,10 @@ trait ServiceRegistryActor extends Actor with WithLogging {
       }
       case StopServices(servicesRunning, initiator) => {
          log.debug("Stopping started")
+         stopServices(servicesRunning, initiator)
+      }
+      case ServiceStopped(serviceName, servicesRunning, initiator) => {
+         log.info(s"$serviceName stopped")
          stopServices(servicesRunning, initiator)
       }
    }

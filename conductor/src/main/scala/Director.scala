@@ -4,8 +4,7 @@ import akka.actor.{Actor,ActorSystem,Props}
 
 object Director {
    case class StartStackOrService(stackOrServiceName: String)
-  //  case class ServiceNotFound(ServiceName: String)
-  //  case object ServicesStarted
+   case class StopStackOrService(stackOrServiceName: String)
    def props() = Props(classOf[Director])
 }
 
@@ -27,9 +26,16 @@ trait DirectorActor extends Actor with WithLogging {
          log.debug(s"Start a stack or service: $stackOrServiceName")
          stackRegistry ! FindAndStartStack(stackOrServiceName)
       }
+      case StopStackOrService(stackOrServiceName) => {
+         log.debug(s"Stop a stack or service: $stackOrServiceName")
+         stackRegistry ! FindAndStopStack(stackOrServiceName)
+      }
       case StackNotFound(possibleServiceName) => {
          log.debug(s"Not a stack: $possibleServiceName")
          serviceRegistry ! new FindAndStartServices(possibleServiceName, self)
+      }
+      case StackNotRunning(stackName) => {
+         log.debug(s"Stack is not running: $stackName")
       }
       case ServiceNotFound(serviceName) => {
          log.warning(s"Service not found: $serviceName")

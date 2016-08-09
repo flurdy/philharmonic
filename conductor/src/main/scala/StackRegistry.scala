@@ -1,19 +1,20 @@
 package com.flurdy.conductor
 
-import akka.actor.{Actor,ActorRef,Props}
+import akka.actor.{Actor,ActorRef,PoisonPill,Props}
 
 object StackRegistry {
    case class FindAndStartStack(stackName: String)
+   case class FindAndStopStack(stackName: String)
    case class StackNotFound(stackName: String)
-   case class StackStarted(stackName: String)
-   case class StackStopped(stackName: String)
+   case class StackNotRunning(stackName: String)
+   case class StackStarted(stackName: String, stack: ActorRef)
+   case class StackStopped(stackName: String, stack: ActorRef)
    def props(serviceRegistry: ActorRef) = Props(classOf[StackRegistry], serviceRegistry)
 }
 
 class StackRegistry(val serviceRegistry: ActorRef) extends StackRegistryActor
 
 trait StackRegistryActor extends Actor with WithLogging {
-   import Director._
    import StackRegistry._
    import Stack._
 
@@ -24,6 +25,7 @@ trait StackRegistryActor extends Actor with WithLogging {
    val myDatabase = "my-database"
    val myStack = StackDetails("mystack", Seq(myService,myDatabase))
    val stacks = Map("mystack" -> myStack)
+   var stacksRunning: Map[String, ActorRef] = Map.empty
 
    def normal: Receive = {
       case FindAndStartStack(stackName) => {
@@ -37,11 +39,27 @@ trait StackRegistryActor extends Actor with WithLogging {
                sender ! StackNotFound(stackName)
          }
       }
-      case StackStarted(stackName) => {
-         log.info(s"Started $stackName")
+      case FindAndStopStack(stackName) => {
+         log.debug(s"Finding $stackName")
+         stacks.get(stackName) match {
+            case Some(stack) =>
+               stacksRunning.get(stackName) match {
+                  case Some(runningStack) =>
+                     runningStack ! StopStack
+                  case _ =>
+                     sender ! StackNotRunning(stackName)
+               }
+            case _ =>
+               sender ! StackNotFound(stackName)
+         }
       }
-      case StackStopped(stackName) => {
+      case StackStarted(stackName, stack) => {
+         log.info(s"Started $stackName")
+         stacksRunning = stacksRunning + (stackName -> stack)
+      }
+      case StackStopped(stackName, stack) => {
          log.info(s"Stopped $stackName")
+         stack ! PoisonPill
       }
    }
 }

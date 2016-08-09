@@ -47,7 +47,7 @@ trait StackActor extends Actor with WithLogging {
          log.debug(s"Services of ${details.name} started")
          this.runningServices = services
          context.become(servicesRunning)
-         stackRegistry ! StackStarted(details.name)
+         stackRegistry ! StackStarted(details.name, self)
       }
    }
 
@@ -64,7 +64,7 @@ trait StackActor extends Actor with WithLogging {
         log.debug(s"Services of ${details.name} stopped")
         this.runningServices = Map.empty
         context.become(normal)
-        stackRegistry ! StackStopped(details.name)
+        stackRegistry ! StackStopped(details.name, self)
       }
    }
 }

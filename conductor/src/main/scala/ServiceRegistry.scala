@@ -1,6 +1,6 @@
 package com.flurdy.conductor
 
-import akka.actor.{Actor,ActorRef,Props}
+import akka.actor.{Actor,ActorRef,PoisonPill,Props}
 
 object ServiceRegistry {
    case class FindAndStartServices(serviceNames: Seq[String], services: Map[String, ActorRef], initiator: ActorRef){
@@ -9,7 +9,7 @@ object ServiceRegistry {
    case class FindAndStopService(serviceName: String, initiator: ActorRef)
    case class ServiceNotFound(serviceName: String)
    case class ServiceStarted(stackName: String, servicesToStart: Seq[String], services: Map[String, ActorRef], initiator: ActorRef)
-   case class ServiceStopped(stackName: String, services: Map[String, ActorRef], initiator: ActorRef)
+   case class ServiceStopped(stackName: String, self: ActorRef, services: Map[String, ActorRef], initiator: ActorRef)
    case class StopServices(servicesRunning: Map[String, ActorRef], initiator: ActorRef)
    def props() = Props(classOf[ServiceRegistry])
 }
@@ -44,6 +44,7 @@ trait ServiceRegistryActor extends Actor with WithLogging {
                initiatorService.fold{
                   service ! StartService(tail, servicesWithActor, initiator)
                }{ _ =>
+                  log.debug(s"Service already running: $head")
                   startService(tail, servicesWithActor, initiator)
                }
             }
@@ -74,10 +75,9 @@ trait ServiceRegistryActor extends Actor with WithLogging {
          case head::tail =>
             val headLessServices = services - head
             services.get(head).map(_ ! StopService(headLessServices, initiator ))
-         case Nil =>
-            initiator ! ServicesStopped
+         case Nil => initiator ! ServicesStopped
       }
-    }
+   }
 
    def normal: Receive = {
       case FindAndStartServices(serviceNames, services, initiator) =>
@@ -90,8 +90,13 @@ trait ServiceRegistryActor extends Actor with WithLogging {
       case StopServices(servicesRunning, initiator) =>
          log.debug("Stopping started")
          stopServices(servicesRunning, initiator)
-      case ServiceStopped(serviceName, servicesRunning, initiator) =>
+      case ServiceStopped(serviceName, service, servicesRunning, initiator) =>
          log.info(s"$serviceName stopped")
          stopServices(servicesRunning, initiator)
+         this.servicesRunning.get(initiator).map{ initiatorServices =>
+            val headLessServices = initiatorServices - serviceName
+            this.servicesRunning = this.servicesRunning - initiator + (initiator -> headLessServices)
+         }
+         service ! PoisonPill
    }
 }

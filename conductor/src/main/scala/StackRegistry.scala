@@ -29,15 +29,20 @@ trait StackRegistryActor extends Actor with WithLogging {
    var stacksRunning: Map[String, ActorRef] = Map.empty
 
    def findAndStartStack(stackName: String) = {
-    log.debug(s"Finding $stackName")
-    stacks.get(stackName) match {
-       case Some(details) =>
-          val stack = context.actorOf(
-             Stack.props(details, self, serviceRegistry), s"stack-$stackName-${self.path.name}")
-          stack ! StartStack
-       case _ =>
-          sender ! StackNotFound(stackName)
-    }
+      log.debug(s"Finding $stackName")
+      stacks.get(stackName) match {
+         case Some(details) =>
+            stacksRunning.get(stackName) match {
+               case Some(stack) =>
+                  log.debug(s"Stack already running: $stackName")
+               case _ =>
+                  val stack = context.actorOf(
+                     Stack.props(details, self, serviceRegistry), s"stack-$stackName-${self.path.name}")
+                  stack ! StartStack
+            }
+         case _ =>
+            sender ! StackNotFound(stackName)
+      }
    }
 
    def findAndStopStack(stackName: String) = {
@@ -56,7 +61,7 @@ trait StackRegistryActor extends Actor with WithLogging {
    }
 
    def normal: Receive = {
-      case FindAndStartStack(stackName) => 
+      case FindAndStartStack(stackName) =>
          findAndStartStack(stackName)
       case FindAndStopStack(stackName) =>
         findAndStopStack(stackName)

@@ -6,6 +6,7 @@ object StackRegistry {
    case class FindAndStartStack(stackName: String)
    case class FindAndStopStack(stackName: String)
    case class StackNotFound(stackName: String)
+   case class StackToStopNotFound(stackName: String)
    case class StackNotRunning(stackName: String)
    case class StackStarted(stackName: String, stack: ActorRef)
    case class StackStopped(stackName: String, stack: ActorRef)
@@ -23,43 +24,48 @@ trait StackRegistryActor extends Actor with WithLogging {
 
    val myService  = "my-service"
    val myDatabase = "my-database"
-   val myStack = StackDetails("mystack", Seq(myService,myDatabase))
-   val stacks = Map("mystack" -> myStack)
+   val myStack = StackDetails("my-stack", Seq(myService,myDatabase))
+   val stacks = Map("my-stack" -> myStack)
    var stacksRunning: Map[String, ActorRef] = Map.empty
 
+   def findAndStartStack(stackName: String) = {
+    log.debug(s"Finding $stackName")
+    stacks.get(stackName) match {
+       case Some(details) =>
+          val stack = context.actorOf(
+             Stack.props(details, self, serviceRegistry), s"stack-$stackName-${self.path.name}")
+          stack ! StartStack
+       case _ =>
+          sender ! StackNotFound(stackName)
+    }
+   }
+
+   def findAndStopStack(stackName: String) = {
+     log.debug(s"Finding $stackName")
+     stacks.get(stackName) match {
+        case Some(stack) =>
+           stacksRunning.get(stackName) match {
+              case Some(runningStack) =>
+                 runningStack ! StopStack
+              case _ =>
+                 sender ! StackNotRunning(stackName)
+           }
+        case _ =>
+           sender ! StackToStopNotFound(stackName)
+     }
+   }
+
    def normal: Receive = {
-      case FindAndStartStack(stackName) => {
-         log.debug(s"Finding $stackName")
-         stacks.get(stackName) match {
-            case Some(details) =>
-               val stack = context.actorOf(
-                  Stack.props(details, self, serviceRegistry), s"stack-$stackName")
-               stack ! StartStack
-            case _ =>
-               sender ! StackNotFound(stackName)
-         }
-      }
-      case FindAndStopStack(stackName) => {
-         log.debug(s"Finding $stackName")
-         stacks.get(stackName) match {
-            case Some(stack) =>
-               stacksRunning.get(stackName) match {
-                  case Some(runningStack) =>
-                     runningStack ! StopStack
-                  case _ =>
-                     sender ! StackNotRunning(stackName)
-               }
-            case _ =>
-               sender ! StackNotFound(stackName)
-         }
-      }
-      case StackStarted(stackName, stack) => {
+      case FindAndStartStack(stackName) => 
+         findAndStartStack(stackName)
+      case FindAndStopStack(stackName) =>
+        findAndStopStack(stackName)
+      case StackStarted(stackName, stack) =>
          log.info(s"Started $stackName")
          stacksRunning = stacksRunning + (stackName -> stack)
-      }
-      case StackStopped(stackName, stack) => {
+      case StackStopped(stackName, stack) =>
          log.info(s"Stopped $stackName")
+         stacksRunning = stacksRunning - stackName
          stack ! PoisonPill
-      }
    }
 }

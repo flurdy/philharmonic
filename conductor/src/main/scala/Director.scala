@@ -34,14 +34,21 @@ trait DirectorActor extends Actor with WithLogging {
          log.debug(s"Not a stack: $possibleServiceName")
          serviceRegistry ! new FindAndStartServices(possibleServiceName, self)
       }
+      case StackToStopNotFound(possibleServiceName) => {
+         log.debug(s"Not a stack: $possibleServiceName")
+         serviceRegistry ! new FindAndStopService(possibleServiceName, self)
+      }
       case StackNotRunning(stackName) => {
          log.debug(s"Stack is not running: $stackName")
       }
       case ServiceNotFound(serviceName) => {
          log.warning(s"Service not found: $serviceName")
       }
-      case ServicesStarted => {
+      case ServicesStarted(_) => {
         log.info("Services started")
+      }
+      case ServicesStopped => {
+        log.info("Services stopped")
       }
    }
 

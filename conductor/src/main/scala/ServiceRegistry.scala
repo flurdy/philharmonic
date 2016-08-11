@@ -3,21 +3,20 @@ package com.flurdy.conductor
 import akka.actor.{Actor,ActorRef,PoisonPill,Props}
 
 object ServiceRegistry {
-   case class FindAndStartServices(serviceNames: Seq[String], services: Map[String, ActorRef], initiator: ActorRef){
-     def this(service: String, initiator: ActorRef) = this(Seq(service), Map.empty, initiator)
+   case class FindAndStartServices(serviceNames: Seq[String], initiator: ActorRef){
+     def this(service: String, initiator: ActorRef) = this(Seq(service), initiator)
    }
    case class FindAndStopService(serviceName: String, initiator: ActorRef)
    case class ServiceNotFound(serviceName: String)
-   case class ServiceStarted(stackName: String, servicesToStart: Seq[String], services: Map[String, ActorRef], initiator: ActorRef)
+   case class ServiceStarted(stackName: String, servicesToStart: Seq[String], initiator: ActorRef)
    case class ServiceStopped(stackName: String, self: ActorRef, services: Map[String, ActorRef], initiator: ActorRef)
    case class StopServices(servicesRunning: Map[String, ActorRef], initiator: ActorRef)
-   def props() = Props(classOf[ServiceRegistry])
+   def props(actorFactory: ActorFactory = ActorFactory) = Props(classOf[ServiceRegistry], actorFactory)
 }
 
-class ServiceRegistry extends ServiceRegistryActor
+class ServiceRegistry(val actorFactory: ActorFactory) extends ServiceRegistryActor
 
-trait ServiceRegistryActor extends Actor with WithLogging {
-   // import Director._
+trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory {
    import ServiceRegistry._
    import Stack._
    import Service._
@@ -29,29 +28,32 @@ trait ServiceRegistryActor extends Actor with WithLogging {
    val servicesRegistry = Map("my-service" -> myService, "my-database" -> myDatabase)
    var servicesRunning: Map[ActorRef,Map[String, ActorRef]] = Map.empty
 
-   def startService(serviceNames: Seq[String],
-                    services: Map[String, ActorRef], initiator: ActorRef): Unit = {
+   def startService(serviceNames: Seq[String], initiator: ActorRef): Unit = {
+
+      def createAndStartService(details: ServiceDetails, initiatorServices: Map[String, ActorRef] = Map.empty, tail: List[String]) = {
+         val service = actorFactory.newActor(Service.props(details),
+                              s"service-${details.name}-${initiator.path.name}")
+         servicesRunning = servicesRunning + (initiator -> (initiatorServices + (details.name -> service)))
+         service ! StartService(tail, initiator)
+      }
+
       serviceNames match {
          case head::tail =>
-            servicesRegistry.get(head).fold( initiator ! ServiceNotFound(head) ){ details =>
-               val initiatorService = servicesRunning.get(initiator).flatMap(_.get(head))
-               val service = initiatorService.getOrElse{
-                  context.actorOf(
-                           Service.props(details),
-                           s"service-${details.name}-${initiator.path.name}")
-               }
-               val servicesWithActor = services + (head -> service)
-               initiatorService.fold{
-                  service ! StartService(tail, servicesWithActor, initiator)
-               }{ _ =>
-                  log.debug(s"Service already running: $head")
-                  startService(tail, servicesWithActor, initiator)
+            servicesRegistry.get(head).fold{
+               initiator ! ServiceNotFound(head)
+            }{ details =>
+               servicesRunning.get(initiator).fold{
+                  createAndStartService(details = details, tail = tail)
+               }{ initiatorServices =>
+                     initiatorServices.get(head).fold{
+                        createAndStartService(details, initiatorServices, tail)
+                     } { service =>
+                           log.debug(s"Service already running: $head")
+                           startService(tail, initiator)
+                     }
                }
             }
-         case Nil =>
-            val initiatorService = servicesRunning.get(initiator).getOrElse(Map.empty) ++ services
-            servicesRunning = servicesRunning  + (initiator -> initiatorService)
-            initiator ! ServicesStarted(services)
+         case Nil => initiator ! ServicesStarted(servicesRunning.get(initiator).getOrElse(Map.empty))
       }
    }
 
@@ -80,13 +82,13 @@ trait ServiceRegistryActor extends Actor with WithLogging {
    }
 
    def normal: Receive = {
-      case FindAndStartServices(serviceNames, services, initiator) =>
-         startService(serviceNames, services, initiator)
+      case FindAndStartServices(serviceNames, initiator) =>
+         startService(serviceNames, initiator)
       case FindAndStopService(serviceName, initiator) =>
          findAndStopService(serviceName, initiator)
-      case ServiceStarted(serviceName, servicesToStart, services, initiator) =>
+      case ServiceStarted(serviceName, servicesToStart, initiator) =>
          log.info(s"$serviceName started")
-         startService(servicesToStart, services, initiator)
+         startService(servicesToStart, initiator)
       case StopServices(servicesRunning, initiator) =>
          log.debug("Stopping started")
          stopServices(servicesRunning, initiator)

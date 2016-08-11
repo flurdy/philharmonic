@@ -34,7 +34,7 @@ trait StackActor extends Actor with WithLogging {
       case StartStack => {
          log.debug(s"Start ${details.name}")
          context.become(startingServices)
-         serviceRegistry ! FindAndStartServices(details.services, Map.empty, self)
+         serviceRegistry ! FindAndStartServices(details.services, self)
       }
    }
 

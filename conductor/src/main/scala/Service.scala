@@ -6,7 +6,6 @@ case class ServiceDetails(name: String)
 
 object Service {
    case class StartService(servicesToStart: Seq[String],
-                           services: Map[String, ActorRef],
                            initiator: ActorRef)
    case class StopService(services: Map[String, ActorRef], initiator: ActorRef)
    def props(details: ServiceDetails) = Props(classOf[Service], details)
@@ -23,12 +22,12 @@ trait ServiceActor extends Actor with WithLogging {
    override def receive = normal
 
    def normal: Receive = {
-      case StartService(servicesToStart, services, initiator) => {
+      case StartService(servicesToStart, initiator) => {
          log.debug(s"Start ${details.name}")
 
          // TODO Speak to docker gantry
 
-         sender ! ServiceStarted(details.name, servicesToStart, services, initiator)
+         sender ! ServiceStarted(details.name, servicesToStart, initiator)
       }
       case StopService(services, initiator) => {
          log.debug(s"Stop ${details.name}")

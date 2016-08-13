@@ -1,16 +1,17 @@
 package com.flurdy.conductor
 
 import akka.actor.{Actor,ActorSystem,Props}
+import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
 
 object Director {
    case class StartStackOrService(stackOrServiceName: String)
    case class StopStackOrService(stackOrServiceName: String)
-   def props() = Props(classOf[Director])
+   def props()(implicit actorFactory: ActorFactory) = Props(classOf[Director], actorFactory)
 }
 
-class Director extends DirectorActor
+class Director()(implicit val actorFactory: ActorFactory) extends DirectorActor
 
-trait DirectorActor extends Actor with WithLogging {
+trait DirectorActor extends Actor with WithLogging with WithActorFactory {
    import Director._
    import StackRegistry._
    import ServiceRegistry._
@@ -24,7 +25,7 @@ trait DirectorActor extends Actor with WithLogging {
    def normal: Receive = {
       case StartStackOrService(stackOrServiceName) => {
          log.debug(s"Start a stack or service: $stackOrServiceName")
-         stackRegistry ! FindAndStartStack(stackOrServiceName)
+         stackRegistry ! FindAndStartStack(stackOrServiceName, self)
       }
       case StopStackOrService(stackOrServiceName) => {
          log.debug(s"Stop a stack or service: $stackOrServiceName")

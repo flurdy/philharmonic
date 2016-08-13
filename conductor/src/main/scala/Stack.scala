@@ -5,17 +5,18 @@ import akka.actor.{Actor,ActorRef,Props}
 case class StackDetails(name: String, services: Seq[String])
 
 object Stack {
-   case object StartStack
+   case class StartStack(initiator: ActorRef)
    case object StopStack
    case class ServicesStarted(services: Map[String, ActorRef])
    case class StartServices(services: Seq[String])
    case object ServicesStopped
-   def props(details: StackDetails, stackRegistry: ActorRef, serviceRegistry: ActorRef) = Props(classOf[Stack], details, stackRegistry, serviceRegistry)
+   def props(details: StackDetails, stackRegistry: ActorRef, serviceRegistry: ActorRef, initiator: ActorRef) = Props(classOf[Stack], details, stackRegistry, serviceRegistry, initiator)
 }
 
 class Stack(val details: StackDetails,
             val stackRegistry: ActorRef,
-            val serviceRegistry: ActorRef) extends StackActor
+            val serviceRegistry: ActorRef,
+            val initiator: ActorRef) extends StackActor
 
 trait StackActor extends Actor with WithLogging {
    import Stack._
@@ -25,6 +26,7 @@ trait StackActor extends Actor with WithLogging {
    def details: StackDetails
    def stackRegistry: ActorRef
    def serviceRegistry: ActorRef
+   def initiator: ActorRef
 
    var runningServices: Map[String, ActorRef] = Map.empty
 
@@ -47,7 +49,7 @@ trait StackActor extends Actor with WithLogging {
          log.debug(s"Services of ${details.name} started")
          this.runningServices = services
          context.become(servicesRunning)
-         stackRegistry ! StackStarted(details.name, self)
+         stackRegistry ! StackStarted(details.name, self, initiator)
       }
    }
 

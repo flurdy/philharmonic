@@ -4,8 +4,9 @@ import akka.actor.{ActorSystem,Props}
 import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
-import com.flurdy.sander.server._
 import com.flurdy.conductor._
+import com.flurdy.sander.server._
+import com.flurdy.sander.actor.ActorFactory
 
 class ApplicationDaemon() extends AbstractApplicationDaemon {
   def application = new Application
@@ -17,6 +18,7 @@ with ConductorService with WithLoggingSystem {
    val applicationName = "conductor"
    implicit override val actorSystem = ActorSystem(s"$applicationName-system")
    implicit val materializer = ActorMaterializer()
+   implicit val actorFactory = ActorFactory
    override val director = actorSystem.actorOf(Director.props(), "director")
 
    def startApplication() = {

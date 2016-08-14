@@ -1,6 +1,7 @@
 package com.flurdy.conductor.docker
 
 import com.spotify.docker.client.{DefaultDockerClient, DockerClient => SpotifyDockerClient}
+import com.spotify.docker.client.messages.ContainerConfig
 import SpotifyDockerClient.ListImagesParam
 import scala.collection.JavaConversions._
 import com.flurdy.sander.primitives._
@@ -25,5 +26,10 @@ trait DockerClientApi {
             Some(DockerImage(name,"latest"))
          else None
       }
+   }
+   def startContainer(image: DockerImage) = {
+      val container = client.createContainer(ContainerConfig.builder().build())
+      val id = container.id
+      client.startContainer(id)
    }
 }

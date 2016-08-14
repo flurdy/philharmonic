@@ -10,12 +10,11 @@ object GantryRegistry {
    case class FoundGantry(gantry: ActorRef)
    case class GantryNotFound(details: ServiceDetails)
    case class FindGantry(details: ServiceDetails)
-   def props(dockerClient: DockerClientApi = DockerClient)(implicit actorFactory: ActorFactory) = {
+   def props()(implicit dockerClient: DockerClientApi = DockerClient, actorFactory: ActorFactory) =
       Props(classOf[GantryRegistry], dockerClient, actorFactory)
-   }
 }
 
-class GantryRegistry(val dockerClient: DockerClientApi)(implicit val actorFactory: ActorFactory) extends GantryRegistryActor
+class GantryRegistry()(implicit val dockerClient: DockerClientApi, val actorFactory: ActorFactory) extends GantryRegistryActor
 
 trait GantryRegistryActor extends Actor with WithLogging with WithActorFactory with WithDockerClient {
    import GantryRegistry._

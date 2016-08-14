@@ -54,7 +54,7 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
 
          // TODO Speak to docker gantry
 
-         // sender ! ServiceStopped(details.name, self, services, initiator)
+         sender ! ServiceStopped(details.name, self, services, initiator)
       }
    }
 }

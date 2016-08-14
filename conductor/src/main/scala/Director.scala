@@ -17,8 +17,8 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
    import ServiceRegistry._
    import Stack._
 
-   val serviceRegistry = context.actorOf(ServiceRegistry.props(), "service-registry")
-   val stackRegistry   = context.actorOf(StackRegistry.props(serviceRegistry), "stack-registry")
+   val serviceRegistry = actorFactory.actorOf(ServiceRegistry.props(), "service-registry")
+   val stackRegistry   = actorFactory.actorOf(StackRegistry.props(serviceRegistry), "stack-registry")
 
    override def receive = normal
 

@@ -10,22 +10,22 @@ import com.flurdy.conductor.docker._
 object Gantry {
    case object RunImage
    case object ImageRunning
-   def props(image: DockerImage) = Props(classOf[Gantry], image)
+   def props(image: DockerImage)(implicit dockerClient: DockerClientApi = DockerClient) =
+         Props(classOf[Gantry], image, dockerClient)
 }
 
-class Gantry(val image: DockerImage) extends GantryActor
+class Gantry(val image: DockerImage)(implicit val dockerClient: DockerClientApi) extends GantryActor
 
-trait GantryActor extends Actor with WithLogging {
+trait GantryActor extends Actor with WithLogging with WithDockerClient {
    import Gantry._
+
    def image: DockerImage
 
-   // def DockerImage
    def receive = normal
-
 
    def normal: Receive = {
       case RunImage =>
          log.debug("running image!")
+         dockerClient.startContainer(image)
    }
-
 }

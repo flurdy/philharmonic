@@ -26,7 +26,7 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
       val probeFactory = new ProbeFactory()
       lazy val stack = probeFactory.first
       val serviceRegistry = TestProbe()
-      val stackRegistry = system.actorOf(StackRegistry.props(serviceRegistry.ref, actorFactory = probeFactory))
+      val stackRegistry = system.actorOf(StackRegistry.props(serviceRegistry.ref)(actorFactory = probeFactory))
    }
 
    "FindAndStartStack" should {

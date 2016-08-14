@@ -58,9 +58,22 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
       }
    }
 
+   "ImageRunning" should {
+
+      "report service started" in new Setup {
+
+         service ! ImageRunning
+
+         serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, serviceRegistry.ref)  )
+         
+      }
+   }
+
    "StopService" should {
 
       "stop service" in new Setup {
+
+         service ! ImageRunning
 
          service ! StopService(Map.empty, initiator.ref)
 

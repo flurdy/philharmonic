@@ -11,7 +11,7 @@ object StackRegistry {
    case class StackNotRunning(stackName: String)
    case class StackStarted(stackName: String, stack: ActorRef, initiator: ActorRef)
    case class StackStopped(stackName: String, stack: ActorRef)
-   def props(serviceRegistry: ActorRef, actorFactory: ActorFactory = ActorFactory) = Props(classOf[StackRegistry], serviceRegistry, actorFactory)
+   def props(serviceRegistry: ActorRef)(implicit actorFactory: ActorFactory = ActorFactory) = Props(classOf[StackRegistry], serviceRegistry, actorFactory)
 }
 
 class StackRegistry(val serviceRegistry: ActorRef, val actorFactory: ActorFactory) extends StackRegistryActor

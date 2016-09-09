@@ -23,11 +23,14 @@ trait GantryRegistryActor extends Actor with WithLogging with WithActorFactory w
 
    def normal: Receive = {
       case FindGantry(details) =>
-         dockerClient.findImage(details.name).fold{
-            sender ! GantryNotFound(details)
-         }{ image =>
-            val gantry = actorFactory.actorOf(Gantry.props(image))
-            sender ! FoundGantry(gantry)
+         val realSender = sender
+         dockerClient.findImage(details.name).map{ imageOpt =>
+            imageOpt.fold{
+               realSender ! GantryNotFound(details)
+            }{ image =>
+               val gantry = actorFactory.actorOf(Gantry.props(image))
+               realSender ! FoundGantry(gantry)
+            }
          }
    }
 }

@@ -43,7 +43,7 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
       case FoundGantry(gantry) =>
          this.gantry = Some(gantry)
          gantry ! RunImage
-      case ImageRunning =>
+      case ImageRunning(image) =>
          context.become(runningGantry)
          serviceRegistry ! ServiceStarted(details.name, Seq.empty, serviceRegistry)
    }

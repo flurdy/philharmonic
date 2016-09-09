@@ -8,8 +8,10 @@ import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import GantryRegistry._
 import scala.concurrent.duration._
+import scala.concurrent.Future
 import com.flurdy.conductor.docker.{DockerClientApi,DockerImage}
 import com.flurdy.sander.actor.{ActorFactory,ProbeFactory}
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class GantryRegistrySpec extends TestKit(ActorSystem("GantryRegistry"))
                           with ImplicitSender
@@ -34,7 +36,8 @@ class GantryRegistrySpec extends TestKit(ActorSystem("GantryRegistry"))
 
       "find a docker image" in new Setup {
 
-         when(dockerClientMock.findImage("flurdy/dreamfactory")).thenReturn(Some(DockerImage("flurdy/dreamfactory","latest")))
+         when(dockerClientMock.findImage("flurdy/dreamfactory"))
+            .thenReturn( Future.successful( Some(DockerImage("flurdy/dreamfactory","latest")) ) )
 
          gantryRegistry ! FindGantry(details)
 
@@ -44,7 +47,7 @@ class GantryRegistrySpec extends TestKit(ActorSystem("GantryRegistry"))
 
       "not find an unknown docker image" in new Setup {
 
-         when(dockerClientMock.findImage("flurdy/dreamfactory")).thenReturn(None)
+         when(dockerClientMock.findImage("flurdy/dreamfactory")).thenReturn( Future.successful(None) )
 
          gantryRegistry ! FindGantry(details)
 

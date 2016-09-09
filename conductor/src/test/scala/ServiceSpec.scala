@@ -7,10 +7,10 @@ import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import StackRegistry._
 import ServiceRegistry._
-// import Stack._
 import Service._
 import GantryRegistry._
 import Gantry._
+import com.flurdy.conductor.docker.DockerImage
 import scala.concurrent.duration._
 import com.flurdy.sander.actor.{ActorFactory,ProbeFactory}
 
@@ -32,6 +32,7 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
       lazy val gantryRegistry  = TestProbe()
       lazy val serviceRegistry = TestProbe()
       val details = ServiceDetails(name="my-service")
+      val image = DockerImage("my-service")
       val service = system.actorOf(
          Service.props(details, serviceRegistry.ref, gantryRegistry.ref)(actorFactory = probeFactory))
    }
@@ -62,10 +63,10 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "report service started" in new Setup {
 
-         service ! ImageRunning
+         service ! ImageRunning(image)
 
          serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, serviceRegistry.ref)  )
-         
+
       }
    }
 
@@ -73,7 +74,7 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "stop service" in new Setup {
 
-         service ! ImageRunning
+         service ! ImageRunning(image)
 
          service ! StopService(Map.empty, initiator.ref)
 

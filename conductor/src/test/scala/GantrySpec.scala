@@ -5,11 +5,14 @@ import akka.testkit._
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import Gantry._
-import scala.concurrent.duration._
+import org.mockito.Mockito.{never,verify,when}
+import org.mockito.Matchers.{any,eq => eqTo}
 import com.flurdy.conductor.docker._
-// import com.flurdy.sander.actor.{ActorFactory,ProbeFactory}
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext
+import scala.concurrent.ExecutionContext.Implicits.global
 
-class GantrySpec extends TestKit(ActorSystem("DirectorSpec"))
+class GantrySpec extends TestKit(ActorSystem("GantrySpec"))
                           with ImplicitSender
                           with WordSpecLike
                           with Matchers
@@ -22,16 +25,31 @@ class GantrySpec extends TestKit(ActorSystem("DirectorSpec"))
 
    trait Setup {
       val image = DockerImage("my-service")
-      val gantry = system.actorOf(Gantry.props(image))
+      val container = DockerContainer("container-id"," my-service")
+      val dockerClientMock = mock[DockerClientApi]
+      val gantry = system.actorOf(Gantry.props(image)(dockerClientMock), "gantry-under-test")
    }
 
    "RunImage" should {
 
       "try to run image" in new Setup {
 
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( Some(container) ) )
+
+         when( dockerClientMock.isContainerRunning( eqTo(container) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( false ) )
+
+         when( dockerClientMock.startContainer( eqTo("container-id") )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( () ) )
+
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( Some(container) ) )
+
          gantry ! RunImage
 
-         // TODO
+         val expected = image.copy(container = Some(container))
+         expectMsg( ImageRunning( expected ) )
 
       }
    }

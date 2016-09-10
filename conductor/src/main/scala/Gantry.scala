@@ -9,7 +9,9 @@ import com.flurdy.sander.primitives._
 
 object Gantry {
    case object RunImage
+   case object StopImage
    case class ImageRunning(image: DockerImage)
+   case class ImageStopped(image: DockerImage)
    def props(image: DockerImage)(implicit dockerClient: DockerClientApi = DockerClient) =
          Props(classOf[Gantry], image, dockerClient)
 }

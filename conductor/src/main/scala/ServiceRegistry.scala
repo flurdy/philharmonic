@@ -87,16 +87,21 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
    }
 
    def normal: Receive = {
+
       case FindAndStartServices(serviceNames, initiator) =>
          startService(serviceNames, initiator)
+
       case FindAndStopService(serviceName, initiator) =>
          findAndStopService(serviceName, initiator)
+
       case ServiceStarted(serviceName, servicesToStart, initiator) =>
          log.info(s"$serviceName started")
          startService(servicesToStart, initiator)
+
       case StopServices(servicesRunning, initiator) =>
          log.debug("Stopping started")
          stopServices(servicesRunning, initiator)
+
       case ServiceStopped(serviceName, service, servicesRunning, initiator) =>
          log.info(s"$serviceName stopped")
          stopServices(servicesRunning, initiator)

@@ -23,34 +23,34 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
    override def receive = normal
 
    def normal: Receive = {
-      case StartStackOrService(stackOrServiceName) => {
+      case StartStackOrService(stackOrServiceName) => 
          log.debug(s"Start a stack or service: $stackOrServiceName")
          stackRegistry ! FindAndStartStack(stackOrServiceName, self)
-      }
-      case StopStackOrService(stackOrServiceName) => {
+
+      case StopStackOrService(stackOrServiceName) =>
          log.debug(s"Stop a stack or service: $stackOrServiceName")
          stackRegistry ! FindAndStopStack(stackOrServiceName)
-      }
-      case StackNotFound(possibleServiceName) => {
+
+      case StackNotFound(possibleServiceName) =>
          log.debug(s"Not a stack: $possibleServiceName")
          serviceRegistry ! new FindAndStartServices(possibleServiceName, self)
-      }
-      case StackToStopNotFound(possibleServiceName) => {
+
+      case StackToStopNotFound(possibleServiceName) =>
          log.debug(s"Not a stack: $possibleServiceName")
          serviceRegistry ! new FindAndStopService(possibleServiceName, self)
-      }
-      case StackNotRunning(stackName) => {
+
+      case StackNotRunning(stackName) =>
          log.debug(s"Stack is not running: $stackName")
-      }
-      case ServiceNotFound(serviceName) => {
+
+      case ServiceNotFound(serviceName) =>
          log.warning(s"Service not found: $serviceName")
-      }
-      case ServicesStarted(_) => {
+
+      case ServicesStarted(_) =>
         log.info("Services started")
-      }
-      case ServicesStopped => {
+
+      case ServicesStopped =>
         log.info("Services stopped")
-      }
+
    }
 
 }

@@ -2,8 +2,6 @@ package com.flurdy.conductor
 
 import akka.actor.{Actor,ActorRef,Props}
 import scala.concurrent.ExecutionContext.Implicits.global
-import argonaut._
-import Argonaut._
 import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
 
 case class ServiceDetails(name: String)
@@ -36,25 +34,62 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
    override def receive = normal
 
    def normal: Receive = {
-      case StartService(servicesToStart) => {
+
+      case StartService(servicesToStart) =>
          log.debug(s"Start ${details.name}")
          gantryRegistry ! FindGantry(details)
-      }
+
       case FoundGantry(gantry) =>
          this.gantry = Some(gantry)
+         context.become(startingGantry)
          gantry ! RunImage
+
+      case StopService(services, initiator) =>
+         log.warning(s"Service already stopped: ${details.name}")
+
+   }
+
+   def startingGantry: Receive = {
+
+      case StartService(servicesToStart) =>
+         log.warning(s"Service already starting: ${details.name}")
+
       case ImageRunning(image) =>
          context.become(runningGantry)
          serviceRegistry ! ServiceStarted(details.name, Seq.empty, serviceRegistry)
+
+      case StopService(services, initiator) =>
+         // TODO: schedule stop msg
+
    }
 
    def runningGantry: Receive = {
-      case StopService(services, initiator) => {
+
+      case StartService(servicesToStart) =>
+         log.warning(s"Service already running: ${details.name}")
+
+      case StopService(services, initiator) =>
          log.debug(s"Stop ${details.name}")
+         gantry.fold {
+            log.warning(s"No gantry found ${details.name}")
+         }{ gantry =>
+            context.become(stoppingGantry)
 
-         // TODO Speak to docker gantry
+            gantry ! StopImage
+         }
+   }
 
-         sender ! ServiceStopped(details.name, self, services, initiator)
-      }
+   def stoppingGantry: Receive = {
+      case StartService(servicesToStart) =>
+         log.warning(s"Service stopping: ${details.name}")
+
+      case ImageStopped(image) =>
+         context.become(normal)
+         // serviceRegistry ! ServiceStopped(details.name, Seq.empty, serviceRegistry)
+         serviceRegistry ! ServiceStopped(details.name, self, Map.empty, serviceRegistry)
+
+      case StopService(services, initiator) =>
+         log.warning(s"Service stopping: ${details.name}")
+
    }
 }

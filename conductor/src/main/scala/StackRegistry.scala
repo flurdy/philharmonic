@@ -49,13 +49,10 @@ trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
      stacks.get(stackName) match {
         case Some(stack) =>
            stacksRunning.get(stackName) match {
-              case Some(runningStack) =>
-                 runningStack ! StopStack
-              case _ =>
-                 sender ! StackNotRunning(stackName)
+              case Some(runningStack) => runningStack ! StopStack
+              case _ => sender ! StackNotRunning(stackName)
            }
-        case _ =>
-           sender ! StackToStopNotFound(stackName)
+        case _ => sender ! StackToStopNotFound(stackName)
      }
    }
 

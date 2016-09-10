@@ -63,6 +63,11 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "report service started" in new Setup {
 
+         service ! StartService(Seq.empty)
+         gantryRegistry.expectMsg( FindGantry(details) )
+         service ! FoundGantry(gantry.ref)
+         gantry.expectMsg( RunImage )
+
          service ! ImageRunning(image)
 
          serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, serviceRegistry.ref)  )
@@ -74,11 +79,33 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "stop service" in new Setup {
 
+         service ! StartService(Seq.empty)
+         service ! FoundGantry(gantry.ref)
+         gantry.expectMsg( RunImage )
          service ! ImageRunning(image)
 
          service ! StopService(Map.empty, initiator.ref)
 
-         expectMsg( ServiceStopped("my-service", service, Map.empty, initiator.ref) )
+         gantry.expectMsg( StopImage )
+
+      }
+   }
+
+   "ImageStopped" should {
+
+      "propegate image stopped" in new Setup {
+
+            service ! StartService(Seq.empty)
+            service ! FoundGantry(gantry.ref)
+            gantry.expectMsg( RunImage )
+            service ! ImageRunning(image)
+            serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, serviceRegistry.ref)  )
+            service ! StopService(Map.empty, initiator.ref)
+            gantry.expectMsg( StopImage )
+
+            service ! ImageStopped(image)
+
+            serviceRegistry.expectMsg( ServiceStopped("my-service", service, Map.empty, serviceRegistry.ref) )
 
       }
    }

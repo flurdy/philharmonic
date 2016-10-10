@@ -26,8 +26,10 @@ trait GantryRegistryActor extends Actor with WithLogging with WithActorFactory w
          val realSender = sender
          dockerClient.findImage(details.name).map{ imageOpt =>
             imageOpt.fold{
+               log.debug(s"Gantry image not found: ${details.name}")
                realSender ! GantryNotFound(details)
             }{ image =>
+               log.debug(s"Gantry image found: ${details.name}")
                val gantry = actorFactory.actorOf(Gantry.props(image))
                realSender ! FoundGantry(gantry)
             }

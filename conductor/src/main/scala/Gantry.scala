@@ -27,8 +27,11 @@ trait GantryActor extends Actor with WithLogging with WithDockerClient {
 
    def createContainerIfNeeded(): Future[DockerContainer] =
       image.findContainer().flatMap {
-         case Some(c) => Future.successful(c)
+         case Some(c) =>
+            log.debug("Container exists")
+            Future.successful(c)
          case _ =>
+            log.debug("Creating container")
             for {
                _    <- image.createContainer()
                cOpt <- image.findContainer()
@@ -38,19 +41,44 @@ trait GantryActor extends Actor with WithLogging with WithDockerClient {
 
    def startContainerIfNeeded(container: DockerContainer): Future[DockerContainer] =
       container.isRunning() flatMap {
-         case true  => Future.successful(container)
-         case false => container.start()
+         case true  =>
+            log.debug("Container is running")
+            Future.successful(container)
+         case false =>
+            log.debug("Starting container")
+            container.start()
+      }
+
+   def stopContainerIfNeeded(containerOpt: Option[DockerContainer]): Future[Unit] =
+      containerOpt.fold {
+         Future.successful( () )
+      }{ container =>
+         container.isRunning().flatMap {
+            case true  => container.stop().map( _ => () )
+            case false => Future.successful( () )
+         }
       }
 
    def normal: Receive = {
+
       case RunImage =>
-         log.debug("run image! "+ image.name)
+         log.debug("Run image! "+ image.name)
          val realSender = sender
          for{
             created <- createContainerIfNeeded()
             started <- startContainerIfNeeded(created)
          } {
             realSender ! ImageRunning( image.copy( container = Some(started) ) )
+         }
+
+      case StopImage =>
+         log.debug(s"Stop image ${image.name}")
+         val initiator = sender
+         for {
+            container <- image.findContainer()
+            _         <- stopContainerIfNeeded(container)
+         } {
+            initiator ! ImageStopped( image.copy( container = container ) )
          }
    }
 }

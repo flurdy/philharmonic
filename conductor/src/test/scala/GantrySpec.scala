@@ -26,13 +26,14 @@ class GantrySpec extends TestKit(ActorSystem("GantrySpec"))
    trait Setup {
       val image = DockerImage("my-service")
       val container = DockerContainer("container-id"," my-service")
+      val imageWithContainer = image.copy(container = Some(container) )
       val dockerClientMock = mock[DockerClientApi]
-      val gantry = system.actorOf(Gantry.props(image)(dockerClientMock), "gantry-under-test")
+      val gantry = system.actorOf(Gantry.props(image)(dockerClientMock))
    }
 
    "RunImage" should {
 
-      "try to run image" in new Setup {
+      "return running when starting container given container was not running" in new Setup {
 
          when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
             .thenReturn( Future.successful( Some(container) ) )
@@ -43,14 +44,92 @@ class GantrySpec extends TestKit(ActorSystem("GantrySpec"))
          when( dockerClientMock.startContainer( eqTo("container-id") )(any[ExecutionContext]) )
             .thenReturn( Future.successful( () ) )
 
+         gantry ! RunImage
+
+         val expected = image.copy(container = Some(container))
+         expectMsg( ImageRunning( expected ) )
+
+      }
+
+      "return running when starting container given container did not exist" in new Setup {
+
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( None) )
+
+         when( dockerClientMock.createContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( Some(container) ) )
+
          when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
             .thenReturn( Future.successful( Some(container) ) )
+
+         when( dockerClientMock.isContainerRunning( eqTo(container) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( false ) )
+
+         when( dockerClientMock.startContainer( eqTo("container-id") )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( () ) )
 
          gantry ! RunImage
 
          val expected = image.copy(container = Some(container))
          expectMsg( ImageRunning( expected ) )
 
+      }
+
+      "return running given container is running" in new Setup {
+
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( Some(container)) )
+
+         when( dockerClientMock.isContainerRunning( eqTo(container) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( true ) )
+
+         gantry ! RunImage
+
+         val expected = image.copy(container = Some(container))
+         expectMsg( ImageRunning( expected ) )
+
+      }
+   }
+
+   "StopImage" should {
+
+      "return stopped given container is not running" in new Setup {
+
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( Some(container) ) )
+
+         when( dockerClientMock.isContainerRunning( eqTo(container) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( false ) )
+
+         gantry ! StopImage
+
+         expectMsg(  ImageStopped(imageWithContainer) )
+      }
+
+      "return stopped given container does not exist" in new Setup {
+
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( None ) )
+
+         gantry ! StopImage
+
+         expectMsg(  ImageStopped(image) )
+      }
+
+      "return stopped when stopping container given container was running" in new Setup {
+
+         when( dockerClientMock.findContainer( eqTo(image) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( Some(container) ) )
+
+         when( dockerClientMock.isContainerRunning( eqTo(container) )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( true ) )
+
+         when( dockerClientMock.stopContainer( eqTo("container-id") )(any[ExecutionContext]) )
+            .thenReturn( Future.successful( () ) )
+
+         gantry ! StopImage
+
+         expectMsg(  ImageStopped(imageWithContainer) )
       }
    }
 }

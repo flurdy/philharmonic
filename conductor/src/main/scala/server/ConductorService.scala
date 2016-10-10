@@ -30,14 +30,14 @@ trait ConductorService {
                complete{
                   log.info(s"Starting $serviceName")
                   director ! StartStackOrService(serviceName.toLowerCase)
-                  s"please start: $serviceName"
+                  NoContent
                }
             } ~
             path("stop"){
                complete{
                   log.info(s"Stopping $serviceName")
                   director ! StopStackOrService(serviceName.toLowerCase)
-                  s"please stop: $serviceName"
+                  NoContent
                }
             }
          }

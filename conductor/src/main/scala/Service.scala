@@ -1,13 +1,13 @@
 package com.flurdy.conductor
 
-import akka.actor.{Actor,ActorRef,Props}
+import akka.actor.{Actor,ActorRef,PoisonPill,Props}
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
 
 case class ServiceDetails(name: String)
 
 object Service {
-   case class StartService(servicesToStart: Seq[String])
+   case class StartService(servicesToStart: Seq[String], initiator: ActorRef)
    case class StopService(services: Map[String, ActorRef], initiator: ActorRef)
    def props(details: ServiceDetails, serviceRegistry: ActorRef,
              gantryRegistry: ActorRef)(implicit actorFactory: ActorFactory) =
@@ -29,14 +29,16 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
    def details: ServiceDetails
    def serviceRegistry: ActorRef
    def gantryRegistry: ActorRef
-   var gantry: Option[ActorRef] = None
+   var gantry:    Option[ActorRef] = None
+   var initiator: Option[ActorRef] = None
 
    override def receive = normal
 
    def normal: Receive = {
 
-      case StartService(servicesToStart) =>
+      case StartService(servicesToStart, initiator) =>
          log.debug(s"Start ${details.name}")
+         this.initiator = Some(initiator)
          gantryRegistry ! FindGantry(details)
 
       case FoundGantry(gantry) =>
@@ -51,21 +53,27 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
 
    def startingGantry: Receive = {
 
-      case StartService(servicesToStart) =>
+      case StartService(_, _) =>
          log.warning(s"Service already starting: ${details.name}")
 
       case ImageRunning(image) =>
+         log.debug("Image running")
          context.become(runningGantry)
-         serviceRegistry ! ServiceStarted(details.name, Seq.empty, serviceRegistry)
+         initiator.fold{
+            log.error("Intitiator not set")
+         }{ initiatorFound =>
+            serviceRegistry ! ServiceStarted(details.name, Seq.empty, initiatorFound)
+         }
 
-      case StopService(services, initiator) =>
+      case StopService(_, _) =>
+         log.debug("Stop starting image")
          // TODO: schedule stop msg
 
    }
 
    def runningGantry: Receive = {
 
-      case StartService(servicesToStart) =>
+      case StartService(_, _) =>
          log.warning(s"Service already running: ${details.name}")
 
       case StopService(services, initiator) =>
@@ -80,13 +88,18 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
    }
 
    def stoppingGantry: Receive = {
-      case StartService(servicesToStart) =>
+      case StartService(_, _) =>
          log.warning(s"Service stopping: ${details.name}")
 
       case ImageStopped(image) =>
+         log.debug("Image stopped")
          context.become(normal)
          // serviceRegistry ! ServiceStopped(details.name, Seq.empty, serviceRegistry)
-         serviceRegistry ! ServiceStopped(details.name, self, Map.empty, serviceRegistry)
+         initiator.fold{
+            log.error("Intitiator not set")
+         }{ initiatorFound =>
+            serviceRegistry ! ServiceStopped(details.name, self, Map.empty, initiatorFound)
+         }
 
       case StopService(services, initiator) =>
          log.warning(s"Service stopping: ${details.name}")

@@ -43,7 +43,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
       }
 
@@ -53,7 +53,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
          serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
 
@@ -75,7 +75,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! FindAndStartServices(Seq("my-service","my-database"), self)
 
-         service.expectMsg( StartService(Seq("my-database")) )
+         service.expectMsg( StartService(Seq("my-database"), self) )
 
          serviceRegistry ! ServiceStarted("my-service", Seq("my-database"), self)
 
@@ -85,7 +85,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          val myOtherService = probeFactory.probed.head
 
-         myOtherService.expectMsg( StartService(Seq.empty) )
+         myOtherService.expectMsg( StartService(Seq.empty, self) )
 
       }
    }
@@ -96,7 +96,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! ServiceStarted("my-other-service", Seq("my-service"), self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
       }
 
@@ -122,7 +122,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
          serviceRegistry ! FindAndStopService("my-service", self)
 
@@ -138,7 +138,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
          serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
 
@@ -165,7 +165,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
          serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
 
@@ -200,11 +200,11 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", self)
 
-         service.expectMsg( StartService(Seq.empty) )
+         service.expectMsg( StartService(Seq.empty, self) )
 
          serviceRegistry ! new FindAndStartServices("my-database", self)
 
-         database.expectMsg( StartService(Seq.empty) )
+         database.expectMsg( StartService(Seq.empty, self) )
 
          serviceRegistry ! StopServices(Map("my-service" -> service.ref, "my-database" -> database.ref), self)
 

@@ -41,7 +41,7 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "start service" in new Setup {
 
-         service ! StartService(Seq.empty)
+         service ! StartService(Seq.empty, initiator.ref)
 
          gantryRegistry.expectMsg( FindGantry(details) )
 
@@ -63,14 +63,14 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "report service started" in new Setup {
 
-         service ! StartService(Seq.empty)
+         service ! StartService(Seq.empty, initiator.ref)
          gantryRegistry.expectMsg( FindGantry(details) )
          service ! FoundGantry(gantry.ref)
          gantry.expectMsg( RunImage )
 
          service ! ImageRunning(image)
 
-         serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, serviceRegistry.ref)  )
+         serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, initiator.ref) )
 
       }
    }
@@ -79,7 +79,7 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "stop service" in new Setup {
 
-         service ! StartService(Seq.empty)
+         service ! StartService(Seq.empty, initiator.ref)
          service ! FoundGantry(gantry.ref)
          gantry.expectMsg( RunImage )
          service ! ImageRunning(image)
@@ -95,17 +95,17 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
 
       "propegate image stopped" in new Setup {
 
-            service ! StartService(Seq.empty)
+            service ! StartService(Seq.empty, initiator.ref)
             service ! FoundGantry(gantry.ref)
             gantry.expectMsg( RunImage )
             service ! ImageRunning(image)
-            serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, serviceRegistry.ref)  )
+            serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, initiator.ref)  )
             service ! StopService(Map.empty, initiator.ref)
             gantry.expectMsg( StopImage )
 
             service ! ImageStopped(image)
 
-            serviceRegistry.expectMsg( ServiceStopped("my-service", service, Map.empty, serviceRegistry.ref) )
+            serviceRegistry.expectMsg( ServiceStopped("my-service", service, Map.empty, initiator.ref) )
 
       }
    }

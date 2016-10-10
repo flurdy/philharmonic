@@ -89,6 +89,24 @@ class ServiceSpec extends TestKit(ActorSystem("ServiceSpec"))
          gantry.expectMsg( StopImage )
 
       }
+
+      "eventually stop a starting service" in new Setup {
+
+         service ! StartService(Seq.empty, initiator.ref)
+         service ! FoundGantry(gantry.ref)
+         gantry.expectMsg( RunImage )
+
+         service ! StopService(Map.empty, initiator.ref)
+
+         gantry.expectNoMsg(1.second)
+
+         service ! ImageRunning(image)
+
+         serviceRegistry.expectMsg( ServiceStarted("my-service", Seq.empty, initiator.ref) )
+
+         gantry.expectMsg( StopImage )
+
+      }
    }
 
    "ImageStopped" should {

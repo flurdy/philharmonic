@@ -1,6 +1,7 @@
 package com.flurdy.conductor
 
 import akka.actor.{Actor,ActorRef,PoisonPill,Props}
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
 
@@ -65,10 +66,9 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
             serviceRegistry ! ServiceStarted(details.name, Seq.empty, initiatorFound)
          }
 
-      case StopService(_, _) =>
-         log.debug("Stop starting image")
-         // TODO: schedule stop msg
-
+      case StopService(services, initiator) =>
+         log.debug("Stop starting image in the future")
+         context.system.scheduler.scheduleOnce(200 milliseconds, self, StopService(services, initiator))
    }
 
    def runningGantry: Receive = {
@@ -94,7 +94,6 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
       case ImageStopped(image) =>
          log.debug("Image stopped")
          context.become(normal)
-         // serviceRegistry ! ServiceStopped(details.name, Seq.empty, serviceRegistry)
          initiator.fold{
             log.error("Intitiator not set")
          }{ initiatorFound =>

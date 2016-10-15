@@ -2,16 +2,12 @@ package com.flurdy.conductor
 
 import akka.actor._
 import akka.testkit._
-// import org.mockito.Mockito
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import StackRegistry._
 import ServiceRegistry._
 import Director._
 import Stack._
-// import Service._
-// import GantryRegistry._
-// import Gantry._
 import scala.concurrent.duration._
 import com.flurdy.sander.actor.{ActorFactory,ProbeFactory}
 
@@ -30,7 +26,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
       val probeFactory = new ProbeFactory()
       lazy val initiator       = TestProbe()
       lazy val stackRegistry   = probeFactory.second
-      lazy val serviceRegistry =  probeFactory.first
+      lazy val serviceRegistry = probeFactory.first
       val director = system.actorOf(Director.props()(probeFactory))
    }
 
@@ -40,7 +36,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
          director ! StartStackOrService("my-stack")
 
-         stackRegistry.expectMsg( FindAndStartStack("my-stack", director) )
+         stackRegistry.expectMsg( FindAndStartStack("my-stack", self) )
 
       }
    }
@@ -60,9 +56,20 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
       "try to start service instead" in new Setup {
 
-         director ! StackNotFound("my-stack")
+         director ! StackNotFound("my-stack", initiator.ref)
 
-         serviceRegistry.expectMsg( new FindAndStartServices("my-stack", director) )
+         serviceRegistry.expectMsg( FindAndStartServices(Seq("my-stack"), initiator.ref) )
+
+      }
+   }
+
+   "StackFound" should {
+
+      "return happy case" in new Setup {
+
+         director ! StackFound("my-stack", initiator.ref)
+
+         initiator.expectMsg( Right( StackOrServiceFound("my-stack") ) )
 
       }
    }
@@ -73,7 +80,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
          director ! StackToStopNotFound("my-stack")
 
-         serviceRegistry.expectMsg( new FindAndStopService("my-stack", director) )
+         serviceRegistry.expectMsg( FindAndStopService("my-stack", director) )
 
       }
    }
@@ -94,10 +101,22 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
       "accept and warn" in new Setup {
 
-         director ! ServiceNotFound("my-stack")
+         director ! ServiceNotFound("my-stack", self)
 
          serviceRegistry.expectNoMsg()
          stackRegistry.expectNoMsg()
+         expectMsg(Left(StackOrServiceNotFound("my-stack")))
+
+      }
+   }
+
+   "ServiceFound" should {
+
+      "return happy case" in new Setup {
+
+         director ! ServiceFound("my-stack", initiator.ref)
+
+         initiator.expectMsg( Right( StackOrServiceFound("my-stack") ) )
 
       }
    }

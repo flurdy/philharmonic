@@ -6,7 +6,8 @@ import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
 object StackRegistry {
    case class FindAndStartStack(stackName: String, initiator: ActorRef)
    case class FindAndStopStack(stackName: String)
-   case class StackNotFound(stackName: String)
+   case class StackNotFound(stackName: String, initiator: ActorRef)
+   case class StackFound(stackName: String, initiator: ActorRef)
    case class StackToStopNotFound(stackName: String)
    case class StackNotRunning(stackName: String)
    case class StackStarted(stackName: String, stack: ActorRef, initiator: ActorRef)
@@ -32,11 +33,13 @@ trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
    def findAndStartStack(stackName: String, initiator: ActorRef) = {
       log.debug(s"Finding $stackName")
       stacks.get(stackName).fold {
-         sender ! StackNotFound(stackName)
+         sender ! StackNotFound(stackName, initiator)
       }{ details =>
+         sender ! StackFound(stackName, initiator)
          stacksRunning.get(stackName).fold {
             val stack = actorFactory.actorOf(
-                  Stack.props(details, self, serviceRegistry, self), s"stack-$stackName-${self.path.name}")
+                  Stack.props(details, self, serviceRegistry, self) )
+                  //  s"stack-$stackName-${self.path.name}")
             stack ! StartStack
          }{  stack =>
             log.debug(s"Stack already running: $stackName")

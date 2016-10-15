@@ -41,9 +41,9 @@ trait StackActor extends Actor with WithLogging {
    }
 
    def startingServices: Receive = {
-      case ServiceNotFound(serviceName) => {
+      case ServiceNotFound(serviceName, initiator) => {
          log.warning(s"Services $serviceName not found")
-         stackRegistry ! ServiceNotFound(serviceName)
+         stackRegistry ! ServiceNotFound(serviceName, initiator)
       }
       case ServicesStarted(services) => {
          log.debug(s"Services of ${details.name} started")

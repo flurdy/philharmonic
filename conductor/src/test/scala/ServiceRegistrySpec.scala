@@ -1,9 +1,12 @@
 package com.flurdy.conductor
 
 import akka.actor._
+import akka.pattern.ask
 import akka.testkit._
+import akka.util.Timeout
 import org.mockito.Mockito
 import org.scalatest._
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mock.MockitoSugar
 import ServiceRegistry._
 import Stack.{ServicesStarted,ServicesStopped}
@@ -16,6 +19,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
                           with WordSpecLike
                           with Matchers
                           with MockitoSugar
+                          with ScalaFutures
                           with BeforeAndAfterAll {
 
    override def afterAll = {
@@ -23,9 +27,11 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
    }
 
    trait Setup {
-      val probeFactory = new ProbeFactory()
-      lazy val gantryRegistry = probeFactory.first
-      lazy val service = probeFactory.second
+      val probeFactory   = new ProbeFactory()
+      val gantryRegistry = probeFactory.first
+      val service        = probeFactory.second
+      val initiator      = TestProbe()
+      val sender         = TestProbe()
       val serviceRegistry = system.actorOf(ServiceRegistry.props()(actorFactory = probeFactory))
    }
 
@@ -33,39 +39,49 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "not find non existant services" in new Setup {
 
-         serviceRegistry ! new FindAndStartServices("my-non-existant-service", self)
+         serviceRegistry ! FindAndStartServices(Seq("my-non-existant-service"), initiator.ref)
 
-         expectMsg( ServiceNotFound("my-non-existant-service") )
+         expectMsg( ServiceNotFound("my-non-existant-service", initiator.ref) )
+
+         expectNoMsg(1.second)
 
       }
 
       "find and start my service" in new Setup {
 
-         serviceRegistry ! new FindAndStartServices("my-service", self)
+         serviceRegistry ! FindAndStartServices(Seq("my-service"), initiator.ref)
 
-         service.expectMsg( StartService(Seq.empty, self) )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
+
+         service.expectMsg( StartService(Seq.empty, initiator.ref) )
+         expectNoMsg(1.second)
 
       }
 
       "not start my service if already running" in new Setup {
 
-         val myOtherService = probeFactory.second
+         // val myOtherService = probeFactory.second
 
-         serviceRegistry ! new FindAndStartServices("my-service", self)
+         serviceRegistry ! FindAndStartServices(Seq("my-service"), initiator.ref)
 
-         service.expectMsg( StartService(Seq.empty, self) )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
-         serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
+         service.expectMsg( StartService(Seq.empty, initiator.ref) )
 
-         expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
+         serviceRegistry ! ServiceStarted("my-service", Seq.empty, initiator.ref)
 
-         serviceRegistry ! new FindAndStartServices("my-service", self)
+         initiator.expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
 
-         myOtherService.expectNoMsg(1.second)
+         serviceRegistry ! FindAndStartServices(Seq("my-service"), initiator.ref)
+
+         expectMsg( ServiceFound("my-service", initiator.ref) )
+
 
          service.expectNoMsg(1.second)
 
-         expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
+         initiator.expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
+
+         initiator.expectNoMsg(1.second)
 
          expectNoMsg(1.second)
 
@@ -73,19 +89,24 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "start the next service if my service is already running" in new Setup {
 
-         serviceRegistry ! FindAndStartServices(Seq("my-service","my-database"), self)
+         serviceRegistry ! FindAndStartServices(Seq("my-service","my-database"), initiator.ref)
 
-         service.expectMsg( StartService(Seq("my-database"), self) )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
-         serviceRegistry ! ServiceStarted("my-service", Seq("my-database"), self)
+         service.expectMsg( StartService(Seq("my-database"), initiator.ref) )
 
-         service.expectNoMsg(1.second)
+         serviceRegistry ! ServiceStarted("my-service", Seq("my-database"), initiator.ref)
 
-         expectNoMsg(1.second)
+         expectMsg( ServiceFound("my-database", initiator.ref) )
+
+         probeFactory.unprobed.size shouldBe 0
+         probeFactory.probed.size shouldBe 3
 
          val myOtherService = probeFactory.probed.head
 
-         myOtherService.expectMsg( StartService(Seq.empty, self) )
+         myOtherService.expectMsg( StartService(Seq.empty, initiator.ref) )
+
+         expectNoMsg(1.second)
 
       }
    }
@@ -94,10 +115,13 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "start next service" in new Setup {
 
-         serviceRegistry ! ServiceStarted("my-other-service", Seq("my-service"), self)
+         serviceRegistry ! ServiceStarted("my-other-service", Seq("my-service"), initiator.ref)
 
-         service.expectMsg( StartService(Seq.empty, self) )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
+         service.expectMsg( StartService(Seq.empty, initiator.ref) )
+
+         expectNoMsg(1.second)
       }
 
       "mark all services started" in new Setup {
@@ -106,6 +130,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          expectMsg( ServicesStarted(Map()) )
 
+         expectNoMsg(1.second)
       }
    }
 
@@ -115,20 +140,22 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! FindAndStopService("my-non-existant-service", self)
 
-         expectMsg( ServiceNotFound("my-non-existant-service") )
+         expectMsg( ServiceNotFound("my-non-existant-service", self) )
       }
 
       "find and stop my service" in new Setup {
 
-         serviceRegistry ! new FindAndStartServices("my-service", self)
+         serviceRegistry ! new FindAndStartServices("my-service", initiator.ref)
 
-         service.expectMsg( StartService(Seq.empty, self) )
+         service.expectMsg( StartService(Seq.empty, initiator.ref) )
 
-         serviceRegistry ! FindAndStopService("my-service", self)
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
-         expectNoMsg(1.second)
+         serviceRegistry ! FindAndStopService("my-service", initiator.ref)
 
-         service.expectMsg( StopService(Map(), self) )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
+
+         service.expectMsg( StopService(Map(), initiator.ref) )
 
          expectNoMsg(1.second)
 
@@ -136,25 +163,31 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "stop a non running service" in new Setup {
 
-         serviceRegistry ! new FindAndStartServices("my-service", self)
+         serviceRegistry ! new FindAndStartServices("my-service", initiator.ref)
 
-         service.expectMsg( StartService(Seq.empty, self) )
+         service.expectMsg( StartService(Seq.empty, initiator.ref) )
 
-         serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
-         expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
+         serviceRegistry ! ServiceStarted("my-service", Seq.empty, initiator.ref)
 
-         serviceRegistry ! FindAndStopService("my-service", self)
+         initiator.expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
 
-         service.expectMsg( StopService(Map(), self) )
+         serviceRegistry ! FindAndStopService("my-service", initiator.ref)
 
-         serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), self)
+         service.expectMsg( StopService(Map(), initiator.ref) )
 
-         expectMsg( ServicesStopped )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
-         serviceRegistry ! FindAndStopService("my-service", self)
+         serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), initiator.ref)
 
-         expectMsg( ServicesStopped )
+         initiator.expectMsg( ServicesStopped )
+
+         serviceRegistry ! FindAndStopService("my-service", initiator.ref)
+
+         expectMsg( ServiceFound("my-service", initiator.ref) )
+
+         initiator.expectMsg( ServicesStopped )
 
       }
    }
@@ -163,21 +196,23 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "stop a service" in new Setup {
 
-         serviceRegistry ! new FindAndStartServices("my-service", self)
+         serviceRegistry ! FindAndStartServices(Seq("my-service"), initiator.ref)
 
-         service.expectMsg( StartService(Seq.empty, self) )
+         expectMsg( ServiceFound("my-service", initiator.ref) )
 
-         serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
+         service.expectMsg( StartService(Seq.empty, initiator.ref) )
 
-         expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
+         serviceRegistry ! ServiceStarted("my-service", Seq.empty, initiator.ref)
 
-         serviceRegistry ! FindAndStopService("my-service", self)
+         initiator.expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
 
-         service.expectMsg( StopService(Map(), self) )
+         serviceRegistry ! FindAndStopService("my-service", initiator.ref)
 
-         serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), self)
+         service.expectMsg( StopService(Map(), initiator.ref) )
 
-         expectMsg( ServicesStopped )
+         serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), initiator.ref)
+
+         initiator.expectMsg( ServicesStopped )
 
          // service.expectMsg( PoisonPill )
 
@@ -185,9 +220,9 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "mark all services stopped" in new Setup {
 
-         serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), self)
+         serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), initiator.ref)
 
-         expectMsg( ServicesStopped )
+         initiator.expectMsg( ServicesStopped )
 
       }
    }

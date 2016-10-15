@@ -1,11 +1,17 @@
 package com.flurdy.conductor
 
-import akka.actor.{Actor,ActorSystem,Props}
-import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
+import akka.actor.{Actor, ActorSystem, Props}
+import akka.pattern.{ask, pipe}
+import akka.util.Timeout
+import scala.concurrent.duration._
+import scala.concurrent.Future
+import com.flurdy.sander.actor.{ActorFactory, WithActorFactory}
 
 object Director {
    case class StartStackOrService(stackOrServiceName: String)
    case class StopStackOrService(stackOrServiceName: String)
+   case class StackOrServiceFound(stackOrServiceName: String)
+   case class StackOrServiceNotFound(stackOrServiceName: String)
    def props()(implicit actorFactory: ActorFactory) = Props(classOf[Director], actorFactory)
 }
 
@@ -16,6 +22,9 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
    import StackRegistry._
    import ServiceRegistry._
    import Stack._
+   import context.dispatcher
+
+   implicit val timeout = Timeout(90 seconds)
 
    val serviceRegistry = actorFactory.actorOf(ServiceRegistry.props(), "service-registry")
    val stackRegistry   = actorFactory.actorOf(StackRegistry.props(serviceRegistry), "stack-registry")
@@ -25,25 +34,34 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
    def normal: Receive = {
       case StartStackOrService(stackOrServiceName) =>
          log.debug(s"Start a stack or service: $stackOrServiceName")
-         stackRegistry ! FindAndStartStack(stackOrServiceName, self)
+         stackRegistry ! FindAndStartStack(stackOrServiceName, sender)
 
       case StopStackOrService(stackOrServiceName) =>
          log.debug(s"Stop a stack or service: $stackOrServiceName")
          stackRegistry ! FindAndStopStack(stackOrServiceName)
 
-      case StackNotFound(possibleServiceName) =>
+      case StackNotFound(possibleServiceName, initiator) =>
          log.debug(s"Not a stack: $possibleServiceName will try to start as a service")
-         serviceRegistry ! new FindAndStartServices(possibleServiceName, self)
+         serviceRegistry ! FindAndStartServices(Seq(possibleServiceName), initiator)
+
+      case StackFound(stackName, initiator) =>
+         log.debug(s"Stack found: $stackName")
+         initiator ! Right( StackOrServiceFound(stackName) )
 
       case StackToStopNotFound(possibleServiceName) =>
          log.debug(s"Not a stack: $possibleServiceName, will try to stop as a service")
-         serviceRegistry ! new FindAndStopService(possibleServiceName, self)
+         serviceRegistry ! FindAndStopService(possibleServiceName, self)
 
       case StackNotRunning(stackName) =>
          log.debug(s"Stack is not running: $stackName")
 
-      case ServiceNotFound(serviceName) =>
+      case ServiceNotFound(serviceName, initiator) =>
          log.warning(s"Service not found: $serviceName")
+         initiator ! Left(StackOrServiceNotFound(serviceName))
+
+      case ServiceFound(serviceName, initiator) =>
+         log.debug(s"Service found: $serviceName")
+         initiator ! Right( StackOrServiceFound(serviceName) )
 
       case ServicesStarted(_) =>
         log.info("Services started")

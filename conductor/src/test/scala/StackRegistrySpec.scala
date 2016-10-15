@@ -23,24 +23,27 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
    }
 
    trait Setup {
-      val probeFactory = new ProbeFactory()
-      lazy val stack = probeFactory.first
+      val probeFactory    = new ProbeFactory()
+      lazy val stack      = probeFactory.first
       val serviceRegistry = TestProbe()
-      val stackRegistry = system.actorOf(StackRegistry.props(serviceRegistry.ref)(actorFactory = probeFactory))
+      val initiator       = TestProbe()
+      val stackRegistry   = system.actorOf(StackRegistry.props(serviceRegistry.ref)(actorFactory = probeFactory))
    }
 
    "FindAndStartStack" should {
 
       "not find an unknown stack" in new Setup {
 
-         stackRegistry ! FindAndStartStack("my-unknown-stack", self)
+         stackRegistry ! FindAndStartStack("my-unknown-stack", initiator.ref)
 
-         expectMsg( StackNotFound("my-unknown-stack") )
+         expectMsg( StackNotFound("my-unknown-stack", initiator.ref) )
       }
 
       "find and start stack" in new Setup {
 
-         stackRegistry ! FindAndStartStack("my-stack", self)
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+
+         expectMsg( StackFound("my-stack", initiator.ref) )
 
          stack.expectMsg( StartStack )
       }

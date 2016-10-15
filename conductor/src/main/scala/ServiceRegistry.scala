@@ -8,7 +8,8 @@ object ServiceRegistry {
      def this(service: String, initiator: ActorRef) = this(Seq(service), initiator)
    }
    case class FindAndStopService(serviceName: String, initiator: ActorRef)
-   case class ServiceNotFound(serviceName: String)
+   case class ServiceNotFound(serviceName: String, initiator: ActorRef)
+   case class ServiceFound(serviceName: String, initiator: ActorRef)
    case class ServiceStarted(stackName: String, servicesToStart: Seq[String], initiator: ActorRef)
    case class ServiceStopped(stackName: String, service: ActorRef, services: Map[String, ActorRef], initiator: ActorRef)
    case class StopServices(servicesRunning: Map[String, ActorRef], initiator: ActorRef)
@@ -30,14 +31,14 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
    var servicesRunning: Map[ActorRef,Map[String, ActorRef]] = Map.empty
    val gantryRegistry = actorFactory.actorOf(GantryRegistry.props())
 
-   def startService(serviceNames: Seq[String], initiator: ActorRef): Unit = {
+   def startService(serviceNames: Seq[String], initiator: ActorRef, sender: ActorRef): Unit = {
 
       def createAndStartService(details: ServiceDetails,
                                 initiatorServices: Map[String, ActorRef] = Map.empty,
                                 tail: List[String]) = {
-         log.debug("Creating new service")
-         val service = actorFactory.actorOf(Service.props(details, self, gantryRegistry),
-                                            s"service-${details.name}-${initiator.path.name}")
+         log.debug(s"Creating new service: ${details.name}")
+         val service = actorFactory.actorOf(Service.props(details, self, gantryRegistry) )
+                        //   s"service-${details.name}-${initiator.path.name}")
          servicesRunning = servicesRunning + (initiator -> (initiatorServices + (details.name -> service)))
          service ! StartService(tail, initiator)
       }
@@ -46,7 +47,7 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
          case head::tail =>
             servicesRegistry.get(head).fold{
                log.debug("Service not found")
-               initiator ! ServiceNotFound(head)
+               sender ! ServiceNotFound(head, initiator)
             }{ details =>
                log.debug(s"Service details found: $head")
                servicesRunning.get(initiator).fold{
@@ -55,23 +56,24 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
                }{ initiatorServices =>
                   log.debug(s"Initiator known")
                   initiatorServices.get(head).fold{
+                     log.debug(s"Service $head not running")
                      createAndStartService(details, initiatorServices, tail)
                   } { service =>
-                        log.debug("Service initiator known running")
-                        startService(tail, initiator)
+                        log.debug("Service initiator $head running")
+                        startService(tail, initiator, sender)
                   }
                }
+               sender ! ServiceFound(head, initiator)
             }
          case Nil =>
-            log.debug("initiator is " + initiator)
             initiator ! ServicesStarted(servicesRunning.get(initiator).getOrElse(Map.empty))
       }
    }
 
-   def findAndStopService(serviceName: String, initiator: ActorRef) = {
+   def findAndStopService(serviceName: String, initiator: ActorRef, sender: ActorRef) = {
       servicesRegistry.get(serviceName).fold{
          log.debug("Service not found")
-         initiator ! ServiceNotFound(serviceName)
+         initiator ! ServiceNotFound(serviceName, initiator)
       }{ details =>
          log.debug(s"Service found: $serviceName")
          servicesRunning.get(initiator).fold{
@@ -87,6 +89,7 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
                val headLessServices = initiatorServices - serviceName
                service ! StopService(headLessServices, initiator )
             }
+            sender ! ServiceFound(serviceName, initiator)
          }
       }
    }
@@ -104,14 +107,14 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
    def normal: Receive = {
 
       case FindAndStartServices(serviceNames, initiator) =>
-         startService(serviceNames, initiator)
+         startService(serviceNames, initiator, sender)
 
       case FindAndStopService(serviceName, initiator) =>
-         findAndStopService(serviceName, initiator)
+         findAndStopService(serviceName, initiator, sender)
 
       case ServiceStarted(serviceName, servicesToStart, initiator) =>
          log.info(s"$serviceName started")
-         startService(servicesToStart, initiator)
+         startService(servicesToStart, initiator, sender)
 
       case StopServices(servicesRunning, initiator) =>
          log.debug("Stopping started")

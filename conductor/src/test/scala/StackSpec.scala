@@ -55,9 +55,9 @@ class StackSpec extends TestKit(ActorSystem("StackSpec"))
 
          serviceRegistry.expectMsg( FindAndStartServices(Seq("my-service"), stack) )
 
-         stack ! ServiceNotFound("my-service")
+         stack ! ServiceNotFound("my-service", initiator.ref)
 
-         stackRegistry.expectMsg(  ServiceNotFound("my-service") )
+         stackRegistry.expectMsg(  ServiceNotFound("my-service", initiator.ref) )
 
       }
    }

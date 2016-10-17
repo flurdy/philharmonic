@@ -4,14 +4,14 @@ import akka.actor.{Actor,ActorRef,PoisonPill,Props}
 import com.flurdy.sander.actor.{ActorFactory,WithActorFactory}
 
 object StackRegistry {
-   case class FindAndStartStack(stackName: String, initiator: ActorRef)
-   case class FindAndStopStack(stackName: String)
-   case class StackNotFound(stackName: String, initiator: ActorRef)
-   case class StackFound(stackName: String, initiator: ActorRef)
-   case class StackToStopNotFound(stackName: String)
-   case class StackNotRunning(stackName: String)
-   case class StackStarted(stackName: String, stack: ActorRef, initiator: ActorRef)
-   case class StackStopped(stackName: String, stack: ActorRef)
+   case class FindAndStartStack(   stackName: String, initiator: ActorRef)
+   case class FindAndStopStack(    stackName: String, initiator: ActorRef)
+   case class StackToStartNotFound(stackName: String, initiator: ActorRef)
+   case class StackFound(          stackName: String, initiator: ActorRef)
+   case class StackToStopNotFound( stackName: String, initiator: ActorRef)
+   case class StackNotRunning(     stackName: String)
+   case class StackStarted(        stackName: String, stack: ActorRef, initiator: ActorRef)
+   case class StackStopped(        stackName: String, stack: ActorRef)
    def props(serviceRegistry: ActorRef)(implicit actorFactory: ActorFactory = ActorFactory) = Props(classOf[StackRegistry], serviceRegistry, actorFactory)
 }
 
@@ -33,41 +33,45 @@ trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
    def findAndStartStack(stackName: String, initiator: ActorRef) = {
       log.debug(s"Finding $stackName")
       stacks.get(stackName).fold {
-         sender ! StackNotFound(stackName, initiator)
+         sender ! StackToStartNotFound(stackName, initiator)
       }{ details =>
-         sender ! StackFound(stackName, initiator)
          stacksRunning.get(stackName).fold {
             val stack = actorFactory.actorOf(
                   Stack.props(details, self, serviceRegistry, self) )
-                  //  s"stack-$stackName-${self.path.name}")
             stack ! StartStack
          }{  stack =>
             log.debug(s"Stack already running: $stackName")
          }
+         sender ! StackFound(stackName, initiator)
       }
    }
 
-   def findAndStopStack(stackName: String) = {
+   def findAndStopStack(stackName: String, initiator: ActorRef) = {
      log.debug(s"Finding $stackName")
      stacks.get(stackName) match {
         case Some(stack) =>
+           sender ! StackFound(stackName, initiator)
            stacksRunning.get(stackName) match {
               case Some(runningStack) => runningStack ! StopStack
               case _ => sender ! StackNotRunning(stackName)
            }
-        case _ => sender ! StackToStopNotFound(stackName)
+        case _ => sender ! StackToStopNotFound(stackName, initiator)
      }
    }
 
    def normal: Receive = {
       case FindAndStartStack(stackName, initiator) => findAndStartStack(stackName, initiator)
-      case FindAndStopStack(stackName)  => findAndStopStack(stackName)
+      case FindAndStopStack( stackName, initiator) => findAndStopStack( stackName, initiator)
       case StackStarted(stackName, stack, initiator) =>
          log.info(s"Started $stackName")
-         stacksRunning = stacksRunning + (stackName -> stack)
+         stacks.get(stackName).foreach { _ =>
+            stacksRunning = stacksRunning + (stackName -> stack)
+         }
       case StackStopped(stackName, stack) =>
          log.info(s"Stopped $stackName")
-         stacksRunning = stacksRunning - stackName
+         stacks.get(stackName).foreach { _ =>
+            stacksRunning = stacksRunning - stackName
+         }
          stack ! PoisonPill
    }
 }

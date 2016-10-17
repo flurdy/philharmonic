@@ -25,6 +25,7 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
    trait Setup {
       val probeFactory    = new ProbeFactory()
       lazy val stack      = probeFactory.first
+      lazy val stack2     = probeFactory.second
       val serviceRegistry = TestProbe()
       val initiator       = TestProbe()
       val stackRegistry   = system.actorOf(StackRegistry.props(serviceRegistry.ref)(actorFactory = probeFactory))
@@ -36,7 +37,10 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
 
          stackRegistry ! FindAndStartStack("my-unknown-stack", initiator.ref)
 
-         expectMsg( StackNotFound("my-unknown-stack", initiator.ref) )
+         expectMsg( StackToStartNotFound("my-unknown-stack", initiator.ref) )
+
+         initiator.expectNoMsg()
+
       }
 
       "find and start stack" in new Setup {
@@ -47,40 +51,134 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
 
          stack.expectMsg( StartStack )
       }
+
+      "find but not start an already running stack" in new Setup {
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+
+         expectMsg( StackFound("my-stack", initiator.ref) )
+
+         stack.expectMsg( StartStack )
+
+         stackRegistry ! StackStarted("my-stack", stack.ref, initiator.ref)
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+
+         expectMsg( StackFound("my-stack", initiator.ref) )
+
+         stack.expectNoMsg()
+      }
    }
 
-   // "FindAndStopStack" should {
-   //
-   //    "not find an unknown stack" in new Setup {
-   //
-   //       stackRegistry ! FindAndStopStack("my-stack")
-   //
-   //       fail()
-   //    }
-   //
-   //    "find and stop stack" in new Setup {
-   //
-   //       stackRegistry ! StackStarted("my-stack", stack.ref)
-   //
-   //       fail()
-   //    }
-   // }
+   "FindAndStopStack" should {
 
-   // "StackStarted" should {
-   //
-   //    "" in new Setup {
-   //
-   //       stackRegistry ! StackStopped("my-stack", stack.ref)
-   //
-   //       fail()
-   //    }
-   // }
-   //
-   // "StackStopped" should {
-   //
-   //    "" in new Setup {
-   //       fail()
-   //    }
-   // }
+      "not find an unknown stack" in new Setup {
+
+         stackRegistry ! FindAndStopStack("my-unknown-stack", initiator.ref)
+
+         expectMsg( StackToStopNotFound("my-unknown-stack", initiator.ref) )
+
+         initiator.expectNoMsg()
+
+      }
+
+      "find and not stop non running stack" in new Setup {
+
+         stackRegistry ! FindAndStopStack("my-stack", initiator.ref)
+
+         expectMsg( StackFound("my-stack", initiator.ref) )
+
+         expectMsg( StackNotRunning("my-stack") )
+
+         stack.expectNoMsg()
+
+      }
+
+      "find and stop running stack" in new Setup {
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+
+         expectMsg( StackFound("my-stack", initiator.ref) )
+
+         stack.expectMsg( StartStack )
+
+         stackRegistry ! StackStarted("my-stack", stack.ref, initiator.ref)
+
+         stackRegistry ! FindAndStopStack("my-stack", initiator.ref)
+
+         expectMsg( StackFound("my-stack", initiator.ref) )
+
+         stack.expectMsg( StopStack )
+
+         expectNoMsg()
+
+         stack.expectNoMsg()
+      }
+   }
+
+   "StackStarted" should {
+
+      "marks stack as started" in new Setup {
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectMsg( StartStack )
+
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectNoMsg()
+      }
+
+      "marks stack as not started if not sent" in new Setup {
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectMsg( StartStack )
+
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         stack.expectNoMsg()
+         stack2.expectMsg( StartStack )
+         expectMsg( StackFound("my-stack", initiator.ref) )
+      }
+   }
+
+   "StackStopped" should {
+
+      "remove stack status as running" in new Setup {
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectMsg( StartStack )
+         stackRegistry ! StackStarted("my-stack", stack.ref, initiator.ref)
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectNoMsg()
+
+         stackRegistry ! StackStopped("my-stack", stack.ref)
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack2.expectMsg( StartStack )
+      }
+
+      "kill stopped stack actor" in new Setup {
+         val deathWatch = TestProbe()
+
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectMsg( StartStack )
+         stackRegistry ! StackStarted("my-stack", stack.ref, initiator.ref)
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         expectMsg( StackFound("my-stack", initiator.ref) )
+         stack.expectNoMsg()
+
+         deathWatch watch stack.ref
+
+         stackRegistry ! StackStopped("my-stack", stack.ref)
+
+         deathWatch.expectTerminated(stack.ref)
+      }
+   }
 
 }

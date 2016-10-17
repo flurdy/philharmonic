@@ -47,7 +47,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
          director ! StopStackOrService("my-stack")
 
-         stackRegistry.expectMsg( FindAndStopStack("my-stack") )
+         stackRegistry.expectMsg( FindAndStopStack("my-stack", self) )
 
       }
    }
@@ -56,7 +56,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
       "try to start service instead" in new Setup {
 
-         director ! StackNotFound("my-stack", initiator.ref)
+         director ! StackToStartNotFound("my-stack", initiator.ref)
 
          serviceRegistry.expectMsg( FindAndStartServices(Seq("my-stack"), initiator.ref) )
 
@@ -78,9 +78,9 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
       "try to stop service instead" in new Setup {
 
-         director ! StackToStopNotFound("my-stack")
+         director ! StackToStopNotFound("my-stack", initiator.ref)
 
-         serviceRegistry.expectMsg( FindAndStopService("my-stack", director) )
+         serviceRegistry.expectMsg( FindAndStopService("my-stack", initiator.ref) )
 
       }
    }

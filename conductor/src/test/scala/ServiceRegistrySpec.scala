@@ -76,7 +76,6 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          expectMsg( ServiceFound("my-service", initiator.ref) )
 
-
          service.expectNoMsg(1.second)
 
          initiator.expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
@@ -138,56 +137,44 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
       "not find non existant services" in new Setup {
 
-         serviceRegistry ! FindAndStopService("my-non-existant-service", self)
+         serviceRegistry ! FindAndStopService("my-non-existant-service", initiator.ref)
 
-         expectMsg( ServiceNotFound("my-non-existant-service", self) )
+         expectMsg( ServiceNotFound("my-non-existant-service", initiator.ref) )
       }
 
       "find and stop my service" in new Setup {
 
          serviceRegistry ! new FindAndStartServices("my-service", initiator.ref)
-
          service.expectMsg( StartService(Seq.empty, initiator.ref) )
-
          expectMsg( ServiceFound("my-service", initiator.ref) )
 
          serviceRegistry ! FindAndStopService("my-service", initiator.ref)
 
          expectMsg( ServiceFound("my-service", initiator.ref) )
-
          service.expectMsg( StopService(Map(), initiator.ref) )
-
          expectNoMsg(1.second)
-
       }
 
       "stop a non running service" in new Setup {
 
          serviceRegistry ! new FindAndStartServices("my-service", initiator.ref)
-
          service.expectMsg( StartService(Seq.empty, initiator.ref) )
-
          expectMsg( ServiceFound("my-service", initiator.ref) )
 
          serviceRegistry ! ServiceStarted("my-service", Seq.empty, initiator.ref)
-
          initiator.expectMsg( ServicesStarted(Map("my-service" -> service.ref)) )
 
          serviceRegistry ! FindAndStopService("my-service", initiator.ref)
-
          service.expectMsg( StopService(Map(), initiator.ref) )
-
          expectMsg( ServiceFound("my-service", initiator.ref) )
 
          serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), initiator.ref)
-
          initiator.expectMsg( ServicesStopped )
 
          serviceRegistry ! FindAndStopService("my-service", initiator.ref)
 
+         expectMsg( ServicesStopped )
          expectMsg( ServiceFound("my-service", initiator.ref) )
-
-         initiator.expectMsg( ServicesStopped )
 
       }
    }
@@ -195,6 +182,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
    "ServiceStopped" should {
 
       "stop a service" in new Setup {
+         val deathWatch = TestProbe()
 
          serviceRegistry ! FindAndStartServices(Seq("my-service"), initiator.ref)
 
@@ -210,11 +198,13 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          service.expectMsg( StopService(Map(), initiator.ref) )
 
+         deathWatch watch service.ref
+
          serviceRegistry ! ServiceStopped("my-service", service.ref, Map(), initiator.ref)
 
          initiator.expectMsg( ServicesStopped )
 
-         // service.expectMsg( PoisonPill )
+         deathWatch.expectTerminated(service.ref)
 
       }
 

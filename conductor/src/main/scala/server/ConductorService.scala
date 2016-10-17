@@ -34,7 +34,7 @@ trait ConductorService {
          post {
             path("start"){
                complete{
-                  log.info(s"Starting $serviceName")
+                  log.info(s"Received request to start $serviceName")
                   ask(director, StartStackOrService(serviceName.toLowerCase))
                      .mapTo[Either[StackOrServiceNotFound,StackOrServiceFound]]
                      .map( r => r.fold[StatusCode]( _ => NotFound, _ => NoContent) )
@@ -43,7 +43,7 @@ trait ConductorService {
             } ~
             path("stop"){
                complete{
-                  log.info(s"Stopping $serviceName")
+                  log.info(s"Received request to stop $serviceName")
                   ask(director, StopStackOrService(serviceName.toLowerCase))
                      .mapTo[Either[StackOrServiceNotFound,StackOrServiceFound]]
                      .map( r => r.fold[StatusCode]( _ => NotFound, _ => NoContent) )

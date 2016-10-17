@@ -73,17 +73,17 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
    def findAndStopService(serviceName: String, initiator: ActorRef, sender: ActorRef) = {
       servicesRegistry.get(serviceName).fold{
          log.debug("Service not found")
-         initiator ! ServiceNotFound(serviceName, initiator)
+         sender ! ServiceNotFound(serviceName, initiator)
       }{ details =>
          log.debug(s"Service found: $serviceName")
          servicesRunning.get(initiator).fold{
             log.debug(s"Service not running: $serviceName")
-            initiator ! ServicesStopped
+            sender ! ServicesStopped
          }{ initiatorServices =>
             log.debug(s"Initator already known")
             initiatorServices.get(serviceName).fold{
                log.debug(s"Service not running: $serviceName")
-               initiator ! ServicesStopped
+               sender ! ServicesStopped
             }{ service =>
                log.debug(s"Service already has run: $serviceName")
                val headLessServices = initiatorServices - serviceName

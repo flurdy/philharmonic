@@ -38,9 +38,9 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
 
       case StopStackOrService(stackOrServiceName) =>
          log.debug(s"Stop a stack or service: $stackOrServiceName")
-         stackRegistry ! FindAndStopStack(stackOrServiceName)
+         stackRegistry ! FindAndStopStack(stackOrServiceName, sender)
 
-      case StackNotFound(possibleServiceName, initiator) =>
+      case StackToStartNotFound(possibleServiceName, initiator) =>
          log.debug(s"Not a stack: $possibleServiceName will try to start as a service")
          serviceRegistry ! FindAndStartServices(Seq(possibleServiceName), initiator)
 
@@ -48,9 +48,9 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
          log.debug(s"Stack found: $stackName")
          initiator ! Right( StackOrServiceFound(stackName) )
 
-      case StackToStopNotFound(possibleServiceName) =>
+      case StackToStopNotFound(possibleServiceName, initiator) =>
          log.debug(s"Not a stack: $possibleServiceName, will try to stop as a service")
-         serviceRegistry ! FindAndStopService(possibleServiceName, self)
+         serviceRegistry ! FindAndStopService(possibleServiceName, initiator)
 
       case StackNotRunning(stackName) =>
          log.debug(s"Stack is not running: $stackName")

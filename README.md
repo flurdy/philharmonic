@@ -1,36 +1,51 @@
 # Philharmonic
 
-Microservices orchestration
+### Microservices orchestration
 
-Concept based on https://github.com/hmrc/service-manager but using docker and any hosts.
+Philharmonic lets you orchestrate a collection of microservices.
 
-* registry of services
-* stacks of services
-* depdendency for services
-* mocks and stubs can override service
-* conf.d of services configs
-* hocon or groovy dsl
-* parrallel ramp up
-* block dependency until ready
-* unique name per service
-* unique port per service
-* dynamic ports for automated testing
-* support for
- * docker
- * docker compose
- * docker swarm
- * docker cloud
- * Amazon ECS
- * Google GCE
- * Google GKE
-* run local images
-* repository relase and snapshot builds
-* lookups
- * status
- * port
- * instaces
- * zone
-* logging
-* feature flags and properties injection
-* balcony UI read only viewer
-* fluffer to build images for not yet docker services
+
+### Core concepts
+
+* Microservices running inside Docker containers (In beta)
+* Remote hosts support including cloud suppliers (Planned)
+* Service dependencies to start full stack of services (In dev)
+* Dynamic ports for independent staging, ideal for integration testing (Planned)
+
+
+### Suite of Services
+
+* Conductor - Akka based application to find, start and stop microservices (In beta)
+* Notepad - Service configurations with stub and stack support (In dev)
+* Gantry - Docker API interaction (Currently part of Conductor)
+* Phil - Simple CLI shell that interacts with Conductor (Planned)
+* Melody - Service discovery (Planned)
+
+
+### Project website
+
+* [github.com/flurdy/philharmonic](https://github.com/flurdy/philharmonic)
+
+### Alternatives
+
+* [Service Manager](https://github.com/hmrc/service-manager)
+
+### Roadmap
+
+* [Roadmap](roadmap.md)
+
+### License
+
+* [Apache v2](LICENSE)
+
+### How to install Philharmonic's suite of services
+
+* [Install](install.md)
+
+### How to configure Philharmonic and its microservices
+
+* [Configure](configure.md)
+
+### How to run Philharmonic
+
+* [Use](use.md)

@@ -144,4 +144,32 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
       }
    }
+
+   "StopAllServices" should {
+
+      "stop all services" in new Setup {
+
+         director ! StopAllServices
+
+         stackRegistry.expectMsg(StopAllStacks)
+         serviceRegistry.expectNoMsg()
+      }
+   }
+
+   "AllStacksStopped" should {
+
+      "then stop all services" in new Setup {
+
+         director ! StopAllServices
+
+         stackRegistry.expectMsg(StopAllStacks)
+         expectMsg(Right(StoppingAllServices))
+
+         director ! AllStacksStopped
+         serviceRegistry.expectMsg(StopAllServices(director))
+         director ! AllServicesStopped
+         serviceRegistry.expectNoMsg()
+         stackRegistry.expectNoMsg()
+      }
+   }
 }

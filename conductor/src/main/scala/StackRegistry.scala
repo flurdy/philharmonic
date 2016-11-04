@@ -11,13 +11,15 @@ object StackRegistry {
    case class StackToStopNotFound( stackName: String, initiator: ActorRef)
    case class StackNotRunning(     stackName: String)
    case class StackStarted(        stackName: String, stack: ActorRef, initiator: ActorRef)
-   case class StackStopped(        stackName: String, stack: ActorRef)
+   case class StackStopped(        stackName: String, stack: ActorRef, initiator: ActorRef)
+   case object StopAllStacks
    def props(serviceRegistry: ActorRef)(implicit actorFactory: ActorFactory = ActorFactory) = Props(classOf[StackRegistry], serviceRegistry, actorFactory)
 }
 
 class StackRegistry(val serviceRegistry: ActorRef, val actorFactory: ActorFactory) extends StackRegistryActor
 
 trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
+   import Director._
    import StackRegistry._
    import Stack._
 
@@ -30,7 +32,7 @@ trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
    val stacks = Map("my-stack" -> myStack)
    var stacksRunning: Map[String, ActorRef] = Map.empty
 
-   def findAndStartStack(stackName: String, initiator: ActorRef) = {
+   private def findAndStartStack(stackName: String, initiator: ActorRef) = {
       log.debug(s"Finding $stackName")
       stacks.get(stackName).fold {
          sender ! StackToStartNotFound(stackName, initiator)
@@ -46,7 +48,7 @@ trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
       }
    }
 
-   def findAndStopStack(stackName: String, initiator: ActorRef) = {
+   private def findAndStopStack(stackName: String, initiator: ActorRef) = {
      log.debug(s"Finding $stackName")
      stacks.get(stackName) match {
         case Some(stack) =>
@@ -59,19 +61,52 @@ trait StackRegistryActor extends Actor with WithLogging with WithActorFactory  {
      }
    }
 
-   def normal: Receive = {
+   private def stackStopped(stackName: String, stack: ActorRef) = {
+      log.info(s"Stopped $stackName")
+      stacks.get(stackName).foreach { _ =>
+         stacksRunning = stacksRunning - stackName
+      }
+      stack ! PoisonPill
+   }
+
+   def normal: Receive = openMode
+
+   def openMode: Receive = {
       case FindAndStartStack(stackName, initiator) => findAndStartStack(stackName, initiator)
+
       case FindAndStopStack( stackName, initiator) => findAndStopStack( stackName, initiator)
+
       case StackStarted(stackName, stack, initiator) =>
          log.info(s"Started $stackName")
          stacks.get(stackName).foreach { _ =>
             stacksRunning = stacksRunning + (stackName -> stack)
          }
-      case StackStopped(stackName, stack) =>
-         log.info(s"Stopped $stackName")
-         stacks.get(stackName).foreach { _ =>
-            stacksRunning = stacksRunning - stackName
+
+      case StackStopped(stackName, stack, _) => stackStopped(stackName, stack)
+
+      case StopAllStacks =>
+         log.debug(s"Stopping all stacks")
+         if(stacksRunning.isEmpty){
+            log.debug(s"All stacks stacks stopped")
+            sender ! AllStacksStopped
+         } else {
+            context.become(shutDownMode)
+            stacksRunning.values.foreach( stack =>  stack ! StopStack )
          }
-         stack ! PoisonPill
+   }
+
+   def shutDownMode: Receive = {
+
+      case StackStopped(stackName, stack, initiator) =>
+         stackStopped(stackName, stack)
+         if(stacksRunning.isEmpty){
+            log.debug(s"All stacks stacks stopped")
+            initiator ! AllStacksStopped
+            context.become(openMode)
+         } else log.debug(s"Still stopping ${stacksRunning.size} stacks")
+
+      case StopAllStacks =>
+         log.info(s"Already stopping all stacks")
+         stacksRunning.values.foreach( stack =>  stack ! StopStack )
    }
 }

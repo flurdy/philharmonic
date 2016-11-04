@@ -101,21 +101,17 @@ class StackSpec extends TestKit(ActorSystem("StackSpec"))
       "report stack stopped" in new Setup {
 
          stack ! StartStack
-
          serviceRegistry.expectMsg( FindAndStartServices(Seq("my-service"), stack) )
 
          stack ! ServicesStarted(Map("my-service" -> service.ref))
-
          stackRegistry.expectMsg(  StackStarted("my-stack", stack, initiator.ref) )
 
          stack ! StopStack
-
          serviceRegistry.expectMsg( StopServices( Map("my-service" -> service.ref), stack) )
 
          stack ! ServicesStopped
 
-         stackRegistry.expectMsg( StackStopped("my-stack", stack) )
-
+         stackRegistry.expectMsg( StackStopped("my-stack", stack, initiator.ref) )
       }
    }
 }

@@ -19,6 +19,7 @@ object ServiceRegistry {
 class ServiceRegistry()(implicit val actorFactory: ActorFactory) extends ServiceRegistryActor
 
 trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory {
+   import Director._
    import ServiceRegistry._
    import Stack._
    import Service._
@@ -31,14 +32,13 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
    var servicesRunning: Map[ActorRef,Map[String, ActorRef]] = Map.empty
    val gantryRegistry = actorFactory.actorOf(GantryRegistry.props())
 
-   def startService(serviceNames: Seq[String], initiator: ActorRef, sender: ActorRef): Unit = {
+   private def startService(serviceNames: Seq[String], initiator: ActorRef, director: ActorRef): Unit = {
 
       def createAndStartService(details: ServiceDetails,
                                 initiatorServices: Map[String, ActorRef] = Map.empty,
                                 tail: List[String]) = {
          log.debug(s"Creating new service: ${details.name}")
          val service = actorFactory.actorOf(Service.props(details, self, gantryRegistry) )
-                        //   s"service-${details.name}-${initiator.path.name}")
          servicesRunning = servicesRunning + (initiator -> (initiatorServices + (details.name -> service)))
          service ! StartService(tail, initiator)
       }
@@ -47,7 +47,7 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
          case head::tail =>
             servicesRegistry.get(head).fold{
                log.debug("Service not found")
-               sender ! ServiceNotFound(head, initiator)
+               director ! ServiceNotFound(head, initiator)
             }{ details =>
                log.debug(s"Service details found: $head")
                servicesRunning.get(initiator).fold{
@@ -60,41 +60,42 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
                      createAndStartService(details, initiatorServices, tail)
                   } { service =>
                         log.debug("Service initiator $head running")
-                        startService(tail, initiator, sender)
+                        startService(tail, initiator, director)
                   }
                }
-               sender ! ServiceFound(head, initiator)
+               director ! ServiceFound(head, initiator)
             }
          case Nil =>
-            initiator ! ServicesStarted(servicesRunning.get(initiator).getOrElse(Map.empty))
+            log.debug("==== all services started "+ initiator)
+            log.debug("==== all services started "+ director)
+            director ! ServicesStarted(servicesRunning.get(initiator).getOrElse(Map.empty))
       }
    }
 
-   def findAndStopService(serviceName: String, initiator: ActorRef, sender: ActorRef) = {
+   private def findAndStopService(serviceName: String, initiator: ActorRef, sender: ActorRef) = {
       servicesRegistry.get(serviceName).fold{
          log.debug("Service not found")
          sender ! ServiceNotFound(serviceName, initiator)
       }{ details =>
          log.debug(s"Service found: $serviceName")
-         servicesRunning.get(initiator).fold{
+
+         ( for {
+            initiatorServices <- servicesRunning.get(initiator)
+            service           <- initiatorServices.get(serviceName)
+         } yield (initiatorServices, service)
+         ).fold {
             log.debug(s"Service not running: $serviceName")
             sender ! ServicesStopped
-         }{ initiatorServices =>
-            log.debug(s"Initator already known")
-            initiatorServices.get(serviceName).fold{
-               log.debug(s"Service not running: $serviceName")
-               sender ! ServicesStopped
-            }{ service =>
-               log.debug(s"Service already has run: $serviceName")
-               val headLessServices = initiatorServices - serviceName
-               service ! StopService(headLessServices, initiator )
-            }
-            sender ! ServiceFound(serviceName, initiator)
+         }{ case (initiatorServices, service) =>
+            log.debug(s"Service already has run: $serviceName")
+            val headLessServices = initiatorServices - serviceName
+            service ! StopService(headLessServices, initiator )
          }
+         sender ! ServiceFound(serviceName, initiator)
       }
    }
 
-   def stopServices(services: Map[String, ActorRef], initiator: ActorRef) = {
+   private def stopServices(services: Map[String, ActorRef], initiator: ActorRef) = {
       services.keys.toList match {
          case head::tail =>
             val headLessServices = services - head
@@ -104,7 +105,26 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
       }
    }
 
-   def normal: Receive = {
+   private def serviceStopped(serviceName: String, service: ActorRef, initiator: ActorRef) = {
+      log.info(s"$serviceName stopped")
+      this.servicesRunning.get(initiator).map{ initiatorServices =>
+         val headLessServices = initiatorServices - serviceName
+         this.servicesRunning = this.servicesRunning - initiator
+         if( !headLessServices.isEmpty )
+            this.servicesRunning = this.servicesRunning + (initiator -> headLessServices)
+      }
+      service ! PoisonPill
+   }
+
+   private def headService(services: Map[String, ActorRef]): Option[(ActorRef,Map[String, ActorRef])] = {
+      services.keys.headOption.map{ key =>
+         ( services(key), services - key )
+      }
+   }
+
+   def normal: Receive = onMode
+
+   def onMode: Receive = {
 
       case FindAndStartServices(serviceNames, initiator) =>
          startService(serviceNames, initiator, sender)
@@ -122,11 +142,45 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
 
       case ServiceStopped(serviceName, service, servicesRunning, initiator) =>
          log.info(s"$serviceName stopped")
-         this.servicesRunning.get(initiator).map{ initiatorServices =>
-            val headLessServices = initiatorServices - serviceName
-            this.servicesRunning = this.servicesRunning - initiator + (initiator -> headLessServices)
-         }
+         serviceStopped(serviceName, service, initiator)
          stopServices(servicesRunning, initiator)
-         service ! PoisonPill
+
+      case StopAllServices(initiator) =>
+         log.info("Stopping all services")
+         servicesRunning.get(initiator) match {
+            case Some(initiatorServices) =>
+               context.become(shutDownMode)
+               stopServices(initiatorServices, initiator)
+            case _ =>
+               log.debug("All services already stopped")
+               initiator ! AllServicesStopped
+         }
+   }
+
+   def shutDownMode: Receive = {
+
+      case StopAllServices(initiator) =>
+         log.debug("Already stopping all services")
+
+      case ServiceStopped(serviceName, service, otherServices, initiator) =>
+         log.debug("Stopped a service in shut down mode")
+         serviceStopped(serviceName, service, initiator)
+         if(servicesRunning.isEmpty) {
+            initiator ! AllServicesStopped
+            context.become(onMode)
+         } else if(otherServices.isEmpty) {
+            log.info("All services stopped")
+            context.become(onMode)
+            self ! StopAllServices(initiator)
+         } else {
+            otherServices.toList match {
+               case (headName, headService) :: tail =>
+                  headService ! StopService(tail.toMap, initiator)
+               case _ =>
+                  log.info("All services stopped")
+                  context.become(onMode)
+                  self ! StopAllServices
+            }
+         }
    }
 }

@@ -17,7 +17,7 @@ libraryDependencies ++= {
      "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
      "com.typesafe.akka" %% "akka-http-testkit" % akkaVersion % "test",
      "org.scalatest"     %% "scalatest" % "2.2.6" % "test",
-     "com.flurdy"        %% "sander" % "0.1.3",
+     "com.flurdy"        %% "sander" % "0.1.4",
      "ch.qos.logback"    %  "logback-classic" % "1.1.7",
      "org.mockito"       %  "mockito-all" % "1.10.19" % "test",
      "io.argonaut"       %% "argonaut" % "6.1",

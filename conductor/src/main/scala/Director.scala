@@ -1,6 +1,6 @@
 package com.flurdy.conductor
 
-import akka.actor.{Actor, ActorSystem, Props}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import scala.concurrent.duration._
@@ -12,6 +12,10 @@ object Director {
    case class StopStackOrService(stackOrServiceName: String)
    case class StackOrServiceFound(stackOrServiceName: String)
    case class StackOrServiceNotFound(stackOrServiceName: String)
+   case class StopAllServices(initiator: ActorRef)
+   case object AllStacksStopped
+   case object AllServicesStopped
+   case class StoppingAllServices()
    def props()(implicit actorFactory: ActorFactory) = Props(classOf[Director], actorFactory)
 }
 
@@ -31,7 +35,9 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
 
    override def receive = normal
 
-   def normal: Receive = {
+   def normal: Receive = openMode
+
+   def openMode: Receive = {
       case StartStackOrService(stackOrServiceName) =>
          log.debug(s"Start a stack or service: $stackOrServiceName")
          stackRegistry ! FindAndStartStack(stackOrServiceName, sender)
@@ -69,6 +75,32 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
       case ServicesStopped =>
         log.info("Services stopped")
 
+      case StopAllServices =>
+         log.debug(s"Stopping all stacks")
+         context.become(shutDownMode)
+         stackRegistry ! StopAllStacks
+         sender ! Right(StoppingAllServices)
    }
 
+   def shutDownMode: Receive = {
+      case StartStackOrService(stackOrServiceName) =>
+         log.warning(s"Ignoring start command as shutting down all services")
+
+      case StopStackOrService(stackOrServiceName) =>
+         log.warning(s"Ignoring stop command as already shutting down all services")
+
+      case StopAllServices =>
+         log.info(s"Already stopping all stacks")
+         stackRegistry ! StopAllStacks
+         sender ! Right(StoppingAllServices)
+
+      case AllStacksStopped =>
+         log.debug(s"All stacks stopped, stopping all services")
+         serviceRegistry ! StopAllServices(self)
+
+      case AllServicesStopped =>
+        log.info("All services stopped")
+        context.become(openMode)
+
+   }
 }

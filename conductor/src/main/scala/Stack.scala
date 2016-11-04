@@ -33,40 +33,36 @@ trait StackActor extends Actor with WithLogging {
    override def receive = normal
 
    def normal: Receive = {
-      case StartStack => {
+      case StartStack =>
          log.debug(s"Start ${details.name}")
          context.become(startingServices)
          serviceRegistry ! FindAndStartServices(details.services, self)
-      }
    }
 
    def startingServices: Receive = {
-      case ServiceNotFound(serviceName, initiator) => {
+      case ServiceNotFound(serviceName, initiator) =>
          log.warning(s"Services $serviceName not found")
          stackRegistry ! ServiceNotFound(serviceName, initiator)
-      }
-      case ServicesStarted(services) => {
+
+      case ServicesStarted(services) =>
          log.debug(s"Services of ${details.name} started")
          this.runningServices = services
          context.become(servicesRunning)
          stackRegistry ! StackStarted(details.name, self, initiator)
-      }
    }
 
    def servicesRunning: Receive = {
-      case StopStack => {
+      case StopStack =>
          log.debug(s"Stop ${details.name}")
          context.become(stoppingServices)
          serviceRegistry ! StopServices(runningServices, self)
-      }
    }
 
    def stoppingServices: Receive = {
-     case ServicesStopped => {
+     case ServicesStopped =>
         log.debug(s"Services of ${details.name} stopped")
         this.runningServices = Map.empty
         context.become(normal)
-        stackRegistry ! StackStopped(details.name, self)
-      }
+        stackRegistry ! StackStopped(details.name, self, initiator)
    }
 }

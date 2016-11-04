@@ -5,6 +5,7 @@ import akka.testkit._
 import org.mockito.Mockito
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
+import Director._
 import StackRegistry._
 import Stack._
 import com.flurdy.sander.actor.{ActorFactory,ProbeFactory}
@@ -155,7 +156,7 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
          expectMsg( StackFound("my-stack", initiator.ref) )
          stack.expectNoMsg()
 
-         stackRegistry ! StackStopped("my-stack", stack.ref)
+         stackRegistry ! StackStopped("my-stack", stack.ref, initiator.ref)
 
          stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
          expectMsg( StackFound("my-stack", initiator.ref) )
@@ -175,10 +176,24 @@ class StackRegistrySpec extends TestKit(ActorSystem("StackRegistrySpec"))
 
          deathWatch watch stack.ref
 
-         stackRegistry ! StackStopped("my-stack", stack.ref)
+         stackRegistry ! StackStopped("my-stack", stack.ref, initiator.ref)
 
          deathWatch.expectTerminated(stack.ref)
       }
    }
 
+   "StopAllStacks" should {
+
+      "do something" in new Setup {
+         stackRegistry ! FindAndStartStack("my-stack", initiator.ref)
+         stack.expectMsg( StartStack )
+         stackRegistry ! StackStarted("my-stack", stack.ref, initiator.ref)
+
+         stackRegistry ! StopAllStacks
+
+         stack.expectMsg( StopStack )
+         stackRegistry ! StackStopped("my-stack", stack.ref, initiator.ref)
+         initiator.expectMsg(AllStacksStopped)
+      }
+   }
 }

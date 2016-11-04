@@ -18,7 +18,7 @@ trait ConductorService {
 
    def log: LoggingAdapter
    def director: ActorRef
-   implicit val timeout = Timeout(120 seconds)
+   implicit val timeout = Timeout(20 seconds)
 
    val myExceptionHandler = ExceptionHandler {
      case _: ArithmeticException =>
@@ -47,6 +47,19 @@ trait ConductorService {
                   ask(director, StopStackOrService(serviceName.toLowerCase))
                      .mapTo[Either[StackOrServiceNotFound,StackOrServiceFound]]
                      .map( r => r.fold[StatusCode]( _ => NotFound, _ => NoContent) )
+                     .recover{ case _ => InternalServerError }
+               }
+            }
+         }
+      } ~
+      pathPrefix("services") {
+         path("stop") {
+            post {
+               complete{
+                  log.info(s"Stopping all services")
+                  ask(director, StopAllServices)
+                     .mapTo[Either[Throwable,StoppingAllServices]]
+                     .map( r => NoContent )
                      .recover{ case _ => InternalServerError }
                }
             }

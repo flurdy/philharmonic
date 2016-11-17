@@ -2,6 +2,9 @@ package com.flurdy.conductor
 
 import akka.actor._
 import akka.testkit._
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import org.mockito.Mockito.{times, verify, when}
+import org.mockito.Matchers.any
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import StackRegistry._
@@ -27,34 +30,63 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
       lazy val initiator       = TestProbe()
       lazy val stackRegistry   = probeFactory.second
       lazy val serviceRegistry = probeFactory.first
-      val director = system.actorOf(Director.props()(probeFactory))
+      lazy val configMock = mock[Config]
+   }
+
+   trait StackSetup extends Setup {
+      val config = ConfigFactory.empty()
+                     .withValue("stacks.enabled",
+                                 ConfigValueFactory.fromAnyRef("true"))
+      val director = system.actorOf(Director.props(config)(probeFactory))
+   }
+
+   trait ServiceOnlySetup extends Setup {
+      val config = ConfigFactory.empty()
+                     .withValue("stacks.enabled",
+                                 ConfigValueFactory.fromAnyRef("false"))
+      val director = system.actorOf(Director.props(config)(probeFactory))
    }
 
    "StartStackOrService" should {
 
-      "start stack" in new Setup {
+      "start stack given stack feature is enabled" in new StackSetup {
 
          director ! StartStackOrService("my-stack")
 
          stackRegistry.expectMsg( FindAndStartStack("my-stack", self) )
+      }
 
+      "start stack given stack feature is disabled" in new ServiceOnlySetup {
+
+         director ! StartStackOrService("my-service")
+
+         stackRegistry.expectNoMsg
+         serviceRegistry.expectMsg(FindAndStartServices(Seq("my-service"), self))
       }
    }
 
    "StopStackOrService" should {
 
-      "stop stack" in new Setup {
+      "stop stack given stack feature is enabled" in new StackSetup {
 
          director ! StopStackOrService("my-stack")
 
          stackRegistry.expectMsg( FindAndStopStack("my-stack", self) )
 
       }
+
+      "stop stack given stack feature is disnabled" in new ServiceOnlySetup {
+
+         director ! StopStackOrService("my-service")
+
+         stackRegistry.expectNoMsg
+         serviceRegistry.expectMsg( FindAndStopService("my-service", self) )
+      }
    }
 
-   "StackNotFound" should {
+   "StackNotFound given stack feature is enabled" should {
 
-      "try to start service instead" in new Setup {
+      "try to start service instead" in new StackSetup {
 
          director ! StackToStartNotFound("my-stack", initiator.ref)
 
@@ -63,9 +95,9 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
       }
    }
 
-   "StackFound" should {
+   "StackFound given stack feature is enabled" should {
 
-      "return happy case" in new Setup {
+      "return happy case" in new StackSetup {
 
          director ! StackFound("my-stack", initiator.ref)
 
@@ -74,9 +106,9 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
       }
    }
 
-   "StackToStopNotFound" should {
+   "StackToStopNotFound given stack feature is enabled" should {
 
-      "try to stop service instead" in new Setup {
+      "try to stop service instead" in new StackSetup {
 
          director ! StackToStopNotFound("my-stack", initiator.ref)
 
@@ -85,9 +117,9 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
       }
    }
 
-   "StackNotRunning" should {
+   "StackNotRunning given stack feature is enabled" should {
 
-      "accept and log" in new Setup {
+      "accept and log" in new StackSetup {
 
          director ! StackNotRunning("my-stack")
 
@@ -99,7 +131,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
    "ServiceNotFound" should {
 
-      "accept and warn" in new Setup {
+      "accept and warn" in new StackSetup {
 
          director ! ServiceNotFound("my-stack", self)
 
@@ -112,7 +144,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
    "ServiceFound" should {
 
-      "return happy case" in new Setup {
+      "return happy case" in new StackSetup {
 
          director ! ServiceFound("my-stack", initiator.ref)
 
@@ -123,7 +155,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
    "ServicesStarted" should {
 
-      "accept and log" in new Setup {
+      "accept and log" in new StackSetup {
 
          director ! ServicesStarted( Map("my-stack" -> TestProbe().ref))
 
@@ -135,7 +167,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
    "ServicesStopped" should {
 
-      "accept and log" in new Setup {
+      "accept and log" in new StackSetup {
 
          director ! ServicesStopped
 
@@ -147,7 +179,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
    "StopAllServices" should {
 
-      "stop all services" in new Setup {
+      "stop all services" in new StackSetup {
 
          director ! StopAllServices
 
@@ -158,7 +190,7 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
 
    "AllStacksStopped" should {
 
-      "then stop all services" in new Setup {
+      "then stop all services" in new StackSetup {
 
          director ! StopAllServices
 

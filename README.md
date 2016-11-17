@@ -16,7 +16,7 @@ Philharmonic lets you orchestrate a collection of microservices.
 ### Suite of Services
 
 * Conductor - Akka based application to find, start and stop microservices (In beta)
-* Notepad - Service configurations with stub and stack support (In dev)
+* Notesheet - Service configurations with stub and stack support (In dev)
 * Gantry - Docker API interaction (Currently part of Conductor)
 * Phil - Simple CLI shell that interacts with Conductor (Planned)
 * Melody - Service discovery (Planned)

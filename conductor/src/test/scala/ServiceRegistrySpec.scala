@@ -34,7 +34,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
       val initiator      = TestProbe("spec-initiator")
       val sender         = TestProbe("spec-sender")
       val director       = TestProbe("spec-director")
-      val serviceRegistry = system.actorOf(ServiceRegistry.props()(actorFactory = probeFactory))
+      val serviceRegistry = system.actorOf(ServiceRegistry.props(director.ref)(actorFactory = probeFactory))
    }
 
    "FindAndStartServices" should {
@@ -80,13 +80,13 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! FindAndStartServices(Seq("my-service","my-database"), initiator.ref)
 
-         expectMsg( ServiceFound("my-service", initiator.ref) )
+         director.expectMsg( ServiceFound("my-service", initiator.ref) )
 
          service.expectMsg( StartService(Seq("my-database"), initiator.ref) )
 
          serviceRegistry ! ServiceStarted("my-service", Seq("my-database"), initiator.ref)
 
-         expectMsg( ServiceFound("my-database", initiator.ref) )
+         director.expectMsg( ServiceFound("my-database", initiator.ref) )
 
          probeFactory.unprobed.size shouldBe 0
          probeFactory.probed.size shouldBe 3
@@ -106,7 +106,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! ServiceStarted("my-other-service", Seq("my-service"), initiator.ref)
 
-         expectMsg( ServiceFound("my-service", initiator.ref) )
+         director.expectMsg( ServiceFound("my-service", initiator.ref) )
 
          service.expectMsg( StartService(Seq.empty, initiator.ref) )
 
@@ -117,7 +117,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! ServiceStarted("my-service", Seq.empty, self)
 
-         expectMsg( ServicesStarted(Map()) )
+         director.expectMsg( ServicesStarted(Map()) )
 
          expectNoMsg(1.second)
       }
@@ -136,7 +136,7 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
          serviceRegistry ! new FindAndStartServices("my-service", initiator.ref)
          service.expectMsg( StartService(Seq.empty, initiator.ref) )
-         expectMsg( ServiceFound("my-service", initiator.ref) )
+         director.expectMsg( ServiceFound("my-service", initiator.ref) )
 
          serviceRegistry ! FindAndStopService("my-service", initiator.ref)
 
@@ -230,7 +230,6 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
 
    "StopAllServices" should {
       "stop all services" in new Setup {
-         println("===INIT REF"+initiator.ref)
          director.send(serviceRegistry, new FindAndStartServices("my-service", initiator.ref))
          service.expectMsg( StartService(Seq.empty, initiator.ref) )
          director.expectMsg( ServiceFound("my-service", initiator.ref) )

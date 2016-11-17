@@ -50,6 +50,8 @@ trait ServiceActor extends Actor with WithLogging with WithActorFactory{
       case StopService(services, initiator) =>
          log.warning(s"Service already stopped: ${details.name}")
 
+      case GantryNotFound(details) =>
+         log.warning(s"Gantry not found ${details.name}")
    }
 
    def startingGantry: Receive = {

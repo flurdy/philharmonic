@@ -3,6 +3,7 @@ package com.flurdy.conductor
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
+import com.typesafe.config.Config
 import scala.concurrent.duration._
 import scala.concurrent.Future
 import com.flurdy.sander.actor.{ActorFactory, WithActorFactory}
@@ -16,12 +17,12 @@ object Director {
    case object AllStacksStopped
    case object AllServicesStopped
    case class StoppingAllServices()
-   def props()(implicit actorFactory: ActorFactory) = Props(classOf[Director], actorFactory)
+   def props(config: Config)(implicit actorFactory: ActorFactory) = Props(classOf[Director], config, actorFactory)
 }
 
-class Director()(implicit val actorFactory: ActorFactory) extends DirectorActor
+class Director(val config: Config)(implicit val actorFactory: ActorFactory) extends DirectorActor
 
-trait DirectorActor extends Actor with WithLogging with WithActorFactory {
+trait DirectorActor extends Actor with WithLogging with WithActorFactory with WithConfig {
    import Director._
    import StackRegistry._
    import ServiceRegistry._
@@ -30,14 +31,50 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
 
    implicit val timeout = Timeout(90 seconds)
 
-   val serviceRegistry = actorFactory.actorOf(ServiceRegistry.props(), "service-registry")
+   val serviceRegistry = actorFactory.actorOf(ServiceRegistry.props(self), "service-registry")
    val stackRegistry   = actorFactory.actorOf(StackRegistry.props(serviceRegistry), "stack-registry")
 
    override def receive = normal
 
-   def normal: Receive = openMode
+   private lazy val isStacksEnabled = 
+      config.hasPath("stacks.enabled") && config.getBoolean("stacks.enabled")
 
-   def openMode: Receive = {
+   def normal: Receive = if(isStacksEnabled) stackAndServiceMode else serviceOnlyMode
+
+   def serviceOnlyMode: Receive = {
+      case StartStackOrService(serviceName) =>
+         log.debug(s"Start a service: $serviceName")
+         serviceRegistry ! FindAndStartServices(Seq(serviceName), sender)
+
+      case StopStackOrService(serviceName) =>
+         log.debug(s"Stop a service: $serviceName")
+         serviceRegistry ! FindAndStopService(serviceName, sender)
+
+      case ServiceNotFound(serviceName, initiator) =>
+         log.warning(s"Service not found: $serviceName")
+         initiator ! Left(StackOrServiceNotFound(serviceName))
+
+      case ServiceFound(serviceName, initiator) =>
+         log.debug(s"Service found: $serviceName")
+         initiator ! Right( StackOrServiceFound(serviceName) )
+
+      case ServicesStarted(_) =>
+        log.info("Services started")
+
+      case ServicesStopped =>
+        log.info("Services stopped")
+
+      case StopAllServices =>
+         log.debug(s"Stopping all stacks")
+         context.become(shutDownMode)
+         serviceRegistry ! StopAllServices(self)
+         sender ! Right(StoppingAllServices)
+
+      case AllServicesStopped =>
+         log.error("Im so confused now")
+   }
+
+   def stackAndServiceMode: Receive = {
       case StartStackOrService(stackOrServiceName) =>
          log.debug(s"Start a stack or service: $stackOrServiceName")
          stackRegistry ! FindAndStartStack(stackOrServiceName, sender)
@@ -80,6 +117,9 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
          context.become(shutDownMode)
          stackRegistry ! StopAllStacks
          sender ! Right(StoppingAllServices)
+
+      case AllServicesStopped =>
+         log.error("Im so confused now")
    }
 
    def shutDownMode: Receive = {
@@ -100,7 +140,7 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory {
 
       case AllServicesStopped =>
         log.info("All services stopped")
-        context.become(openMode)
-
+        if(isStacksEnabled) context.become(stackAndServiceMode)
+        else context.become(serviceOnlyMode)
    }
 }

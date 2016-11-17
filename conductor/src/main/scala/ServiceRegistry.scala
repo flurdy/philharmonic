@@ -13,10 +13,10 @@ object ServiceRegistry {
    case class ServiceStarted(stackName: String, servicesToStart: Seq[String], initiator: ActorRef)
    case class ServiceStopped(stackName: String, service: ActorRef, services: Map[String, ActorRef], initiator: ActorRef)
    case class StopServices(servicesRunning: Map[String, ActorRef], initiator: ActorRef)
-   def props()(implicit actorFactory: ActorFactory) = Props(classOf[ServiceRegistry], actorFactory)
+   def props(director: ActorRef)(implicit actorFactory: ActorFactory) = Props(classOf[ServiceRegistry], director, actorFactory)
 }
 
-class ServiceRegistry()(implicit val actorFactory: ActorFactory) extends ServiceRegistryActor
+class ServiceRegistry(val director: ActorRef)(implicit val actorFactory: ActorFactory) extends ServiceRegistryActor
 
 trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory {
    import Director._
@@ -26,13 +26,14 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
 
    override def receive = normal
 
+   def director: ActorRef
    val myService  = ServiceDetails("my-service")
    val myDatabase = ServiceDetails("my-database")
    val servicesRegistry = Map("my-service" -> myService, "my-database" -> myDatabase)
    var servicesRunning: Map[ActorRef,Map[String, ActorRef]] = Map.empty
    val gantryRegistry = actorFactory.actorOf(GantryRegistry.props())
 
-   private def startService(serviceNames: Seq[String], initiator: ActorRef, director: ActorRef): Unit = {
+   private def startService(serviceNames: Seq[String], initiator: ActorRef, sender: ActorRef): Unit = {
 
       def createAndStartService(details: ServiceDetails,
                                 initiatorServices: Map[String, ActorRef] = Map.empty,
@@ -66,8 +67,6 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
                director ! ServiceFound(head, initiator)
             }
          case Nil =>
-            log.debug("==== all services started "+ initiator)
-            log.debug("==== all services started "+ director)
             director ! ServicesStarted(servicesRunning.get(initiator).getOrElse(Map.empty))
       }
    }

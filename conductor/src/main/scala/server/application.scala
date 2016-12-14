@@ -21,11 +21,14 @@ with ConductorService with WithLoggingSystem {
    implicit val materializer = ActorMaterializer()
    implicit val actorFactory = ActorFactory
    val conductorConfig = ConfigFactory.load.getConfig("com.flurdy.philharmonic.conductor")
-   override val director = actorSystem.actorOf(Director.props(conductorConfig), "director")
+   implicit val featureToggles  = new DefaultFeatureToggles(conductorConfig)
+   override val director = actorSystem.actorOf(Director.props(), "director")
 
-   def startApplication() = {
+   override def startApplication() = startApplication(8080)
+
+   def startApplication(port: Int) = {
       log.info(s"Starting $applicationName")
-      Http().bindAndHandle(route, "0.0.0.0", 8080)
+      Http().bindAndHandle(route, "0.0.0.0", port)
    }
 
    def stopApplication() = {

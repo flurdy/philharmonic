@@ -12,20 +12,20 @@ object Gantry {
    case object StopImage
    case class ImageRunning(image: DockerImage)
    case class ImageStopped(image: DockerImage)
-   def props(image: DockerImage)(implicit dockerClient: DockerClientApi = DockerClient) =
-         Props(classOf[Gantry], image, dockerClient)
+   def props(image: DockerImage)(implicit dockerClient: DockerClientApi = DockerClient, featureToggles: FeatureToggles) =
+         Props(classOf[Gantry], image, dockerClient, featureToggles)
 }
 
-class Gantry(val image: DockerImage)(implicit val dockerClient: DockerClientApi) extends GantryActor
+class Gantry(val image: DockerImage)(implicit val dockerClient: DockerClientApi, val featureToggles: FeatureToggles) extends GantryActor
 
-trait GantryActor extends Actor with WithLogging with WithDockerClient {
+trait GantryActor extends Actor with WithLogging with WithDockerClient with WithFeatureToggles {
    import Gantry._
 
    def image: DockerImage
 
    def receive = normal
 
-   def createContainerIfNeeded(): Future[DockerContainer] =
+   private def createContainerIfNeeded(): Future[DockerContainer] =
       image.findContainer().flatMap {
          case Some(c) =>
             log.debug("Container exists")
@@ -39,7 +39,7 @@ trait GantryActor extends Actor with WithLogging with WithDockerClient {
             } yield c
       }
 
-   def startContainerIfNeeded(container: DockerContainer): Future[DockerContainer] =
+   private def startContainerIfNeeded(container: DockerContainer): Future[DockerContainer] =
       container.isRunning() flatMap {
          case true  =>
             log.debug("Container is running")
@@ -49,7 +49,7 @@ trait GantryActor extends Actor with WithLogging with WithDockerClient {
             container.start()
       }
 
-   def stopContainerIfNeeded(containerOpt: Option[DockerContainer]): Future[Unit] =
+   private def stopContainerIfNeeded(containerOpt: Option[DockerContainer]): Future[Unit] =
       containerOpt.fold {
          Future.successful( () )
       }{ container =>
@@ -62,23 +62,26 @@ trait GantryActor extends Actor with WithLogging with WithDockerClient {
    def normal: Receive = {
 
       case RunImage =>
-         log.debug("Run image! "+ image.name)
+         log.debug("Run image! " + image.name)
          val realSender = sender
-         for{
-            created <- createContainerIfNeeded()
-            started <- startContainerIfNeeded(created)
-         } {
-            realSender ! ImageRunning( image.copy( container = Some(started) ) )
-         }
+         if(featureToggles.isDockerStubbed) realSender ! ImageRunning( image )
+         else for{
+               created <- createContainerIfNeeded()
+               started <- startContainerIfNeeded(created)
+            } {
+               realSender ! ImageRunning( image.copy( container = Some(started) ) )
+            }
+         
 
       case StopImage =>
          log.debug(s"Stop image ${image.name}")
          val initiator = sender
-         for {
-            container <- image.findContainer()
-            _         <- stopContainerIfNeeded(container)
-         } {
-            initiator ! ImageStopped( image.copy( container = container ) )
-         }
+         if(featureToggles.isDockerStubbed) initiator ! ImageStopped( image )
+         else for {
+               container <- image.findContainer()
+               _         <- stopContainerIfNeeded(container)
+            } {
+               initiator ! ImageStopped( image.copy( container = container ) )
+            }
    }
 }

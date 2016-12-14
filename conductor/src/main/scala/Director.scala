@@ -17,12 +17,12 @@ object Director {
    case object AllStacksStopped
    case object AllServicesStopped
    case class StoppingAllServices()
-   def props(config: Config)(implicit actorFactory: ActorFactory) = Props(classOf[Director], config, actorFactory)
+   def props()(implicit actorFactory: ActorFactory, featureToggles: FeatureToggles) = Props(classOf[Director], actorFactory, featureToggles)
 }
 
-class Director(val config: Config)(implicit val actorFactory: ActorFactory) extends DirectorActor
+class Director()(implicit val actorFactory: ActorFactory, val featureToggles: FeatureToggles) extends DirectorActor
 
-trait DirectorActor extends Actor with WithLogging with WithActorFactory with WithConfig {
+trait DirectorActor extends Actor with WithLogging with WithActorFactory with WithFeatureToggles {
    import Director._
    import StackRegistry._
    import ServiceRegistry._
@@ -36,8 +36,7 @@ trait DirectorActor extends Actor with WithLogging with WithActorFactory with Wi
 
    override def receive = normal
 
-   private lazy val isStacksEnabled = 
-      config.hasPath("stacks.enabled") && config.getBoolean("stacks.enabled")
+   private lazy val isStacksEnabled = featureToggles.isStacksEnabled
 
    def normal: Receive = if(isStacksEnabled) stackAndServiceMode else serviceOnlyMode
 

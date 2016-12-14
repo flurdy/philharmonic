@@ -13,12 +13,13 @@ object ServiceRegistry {
    case class ServiceStarted(stackName: String, servicesToStart: Seq[String], initiator: ActorRef)
    case class ServiceStopped(stackName: String, service: ActorRef, services: Map[String, ActorRef], initiator: ActorRef)
    case class StopServices(servicesRunning: Map[String, ActorRef], initiator: ActorRef)
-   def props(director: ActorRef)(implicit actorFactory: ActorFactory) = Props(classOf[ServiceRegistry], director, actorFactory)
+   def props(director: ActorRef)(implicit actorFactory: ActorFactory, featureToggles: FeatureToggles) =
+       Props(classOf[ServiceRegistry], director, actorFactory, featureToggles)
 }
 
-class ServiceRegistry(val director: ActorRef)(implicit val actorFactory: ActorFactory) extends ServiceRegistryActor
+class ServiceRegistry(val director: ActorRef)(implicit val actorFactory: ActorFactory, val featureToggles: FeatureToggles) extends ServiceRegistryActor
 
-trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory {
+trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory with WithFeatureToggles {
    import Director._
    import ServiceRegistry._
    import Stack._
@@ -146,14 +147,31 @@ trait ServiceRegistryActor extends Actor with WithLogging with WithActorFactory 
 
       case StopAllServices(initiator) =>
          log.info("Stopping all services")
-         servicesRunning.get(initiator) match {
-            case Some(initiatorServices) =>
+
+         if( servicesRunning.isEmpty ){
+            log.debug("All services already stopped")
+            initiator ! AllServicesStopped
+         } else
+            for {
+               key         <- servicesRunning.keys
+               services    <- servicesRunning.get(key).toList
+               // serviceName <- services.keys
+               // service     <- services.get(serviceName).toList
+            } {
                context.become(shutDownMode)
-               stopServices(initiatorServices, initiator)
-            case _ =>
-               log.debug("All services already stopped")
-               initiator ! AllServicesStopped
-         }
+               log.debug(s"Stopping ${services.size} services")
+               stopServices(services, initiator)
+            }
+
+         // servicesRunning.get(initiator) match {
+         //    case Some(initiatorServices) =>
+         //       context.become(shutDownMode)
+         //       log.debug(s"Stopping ${initiatorServices.size} services")
+         //       stopServices(initiatorServices, initiator)
+         //    case _ =>
+         //       log.debug("All services already stopped")
+         //       initiator ! AllServicesStopped
+         //
    }
 
    def shutDownMode: Receive = {

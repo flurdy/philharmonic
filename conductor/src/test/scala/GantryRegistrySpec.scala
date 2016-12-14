@@ -28,6 +28,7 @@ class GantryRegistrySpec extends TestKit(ActorSystem("GantryRegistry"))
       implicit val probeFactory = new ProbeFactory()
       val gantry = probeFactory.first
       val details = ServiceDetails(name="flurdy/dreamfactory")
+      implicit val featureToggles: FeatureToggles = new DefaultFeatureToggles()
       implicit val dockerClientMock = mock[DockerClientApi]
       val gantryRegistry = system.actorOf(GantryRegistry.props())
    }

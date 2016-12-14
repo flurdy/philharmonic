@@ -21,3 +21,7 @@ trait WithLoggingSystem {
 trait WithConfig {
    def config: Config
 }
+
+trait WithFeatureToggles {
+   implicit def featureToggles: FeatureToggles
+}

@@ -20,7 +20,7 @@ libraryDependencies ++= {
      "com.flurdy"        %% "sander" % "0.1.4",
      "ch.qos.logback"    %  "logback-classic" % "1.1.7",
      "org.mockito"       %  "mockito-all" % "1.10.19" % "test",
-     "io.argonaut"       %% "argonaut" % "6.1",
-      "com.spotify"      %  "docker-client" % "5.0.2"
+   //   "io.argonaut"       %% "argonaut" % "6.1",
+     "com.spotify"       %  "docker-client" % "5.0.2"
    )
 }

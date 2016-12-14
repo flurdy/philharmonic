@@ -34,7 +34,8 @@ class ServiceRegistrySpec extends TestKit(ActorSystem("ServiceRegistrySpec"))
       val initiator      = TestProbe("spec-initiator")
       val sender         = TestProbe("spec-sender")
       val director       = TestProbe("spec-director")
-      val serviceRegistry = system.actorOf(ServiceRegistry.props(director.ref)(actorFactory = probeFactory))
+      implicit val featureToggles: FeatureToggles = new DefaultFeatureToggles()
+      val serviceRegistry = system.actorOf(ServiceRegistry.props(director.ref)(actorFactory = probeFactory, featureToggles = featureToggles))
    }
 
    "FindAndStartServices" should {

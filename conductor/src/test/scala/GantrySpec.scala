@@ -28,7 +28,8 @@ class GantrySpec extends TestKit(ActorSystem("GantrySpec"))
       val container = DockerContainer("container-id"," my-service")
       val imageWithContainer = image.copy(container = Some(container) )
       val dockerClientMock = mock[DockerClientApi]
-      val gantry = system.actorOf(Gantry.props(image)(dockerClientMock))
+      implicit val featureToggles: FeatureToggles = new DefaultFeatureToggles()
+      val gantry = system.actorOf(Gantry.props(image)(dockerClientMock, featureToggles))
    }
 
    "RunImage" should {

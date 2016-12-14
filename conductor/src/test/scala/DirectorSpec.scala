@@ -37,14 +37,16 @@ class DirectorSpec extends TestKit(ActorSystem("DirectorSpec"))
       val config = ConfigFactory.empty()
                      .withValue("stacks.enabled",
                                  ConfigValueFactory.fromAnyRef("true"))
-      val director = system.actorOf(Director.props(config)(probeFactory))
+      val featureToggles = new DefaultFeatureToggles(config)
+      val director = system.actorOf(Director.props()(probeFactory, featureToggles))
    }
 
    trait ServiceOnlySetup extends Setup {
       val config = ConfigFactory.empty()
                      .withValue("stacks.enabled",
                                  ConfigValueFactory.fromAnyRef("false"))
-      val director = system.actorOf(Director.props(config)(probeFactory))
+      val featureToggles = new DefaultFeatureToggles(config)
+      val director = system.actorOf(Director.props()(probeFactory, featureToggles))
    }
 
    "StartStackOrService" should {
